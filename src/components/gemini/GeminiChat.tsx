@@ -216,9 +216,11 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         });
         return;
       }
-      
+
+      const userId = typeof user.id === 'string' ? user.id : String(user.id);
+
       const workoutData = {
-        user_id: user.id,
+        user_id: userId,
         title: workout.name || workout.title || "Custom Workout",
         type: workout.target || workout.type || "General",
         duration: workout.duration || 30,
@@ -263,8 +265,10 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
+      const userId = typeof user.id === 'string' ? user.id : String(user.id);
+
       const nutritionData = {
-        user_id: user.id,
+        user_id: userId,
         food_name: recipe.title || recipe.name || "Custom Recipe",
         calories: recipe.nutrition?.calories ? Math.floor(Number(recipe.nutrition.calories)) : 300,
         protein: recipe.nutrition?.protein ? Math.floor(Number(recipe.nutrition.protein)) : 25,

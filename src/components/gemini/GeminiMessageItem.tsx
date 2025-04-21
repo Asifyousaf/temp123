@@ -11,7 +11,6 @@ interface GeminiMessageItemProps {
 const GeminiMessageItem: React.FC<GeminiMessageItemProps> = ({ message }) => {
   // Function to format the message content with proper line breaks
   const formatMessageContent = (content: string) => {
-    // Replace normal line breaks with HTML breaks for rendering
     return content.split('\n').map((line, i) => (
       <React.Fragment key={i}>
         {line}
@@ -20,8 +19,18 @@ const GeminiMessageItem: React.FC<GeminiMessageItemProps> = ({ message }) => {
     ));
   };
 
-  // Defensive: Ensure timestamp is a Date object
-  const timestamp = message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp);
+  // Defensive: Ensure timestamp is a Date object even if serialized badly
+  let timestamp: Date;
+  if (!message.timestamp) {
+    timestamp = new Date();
+  } else if (message.timestamp instanceof Date) {
+    timestamp = message.timestamp;
+  } else if (typeof message.timestamp === 'string' || typeof message.timestamp === 'number') {
+    timestamp = new Date(message.timestamp);
+  } else {
+    // Fallback
+    timestamp = new Date();
+  }
 
   return (
     <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
