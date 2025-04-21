@@ -34,7 +34,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversation, setConversation] = useState<Message[]>(() => {
-    // Initialize chat history from localStorage if present
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("geminiChatHistory");
       if (saved) {
@@ -70,12 +69,10 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
   
   const { play, isLoaded } = useSounds();
 
-  // Update isOpen when visible prop changes
   useEffect(() => {
     setIsOpen(visible);
   }, [visible]);
   
-  // Get user session
   useEffect(() => {
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -105,12 +102,10 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     const newIsOpen = !isOpen;
     setIsOpen(newIsOpen);
     
-    // Play notification sound when opening chat
     if (newIsOpen && isLoaded.notification && isSoundEnabled) {
       play('notification', { volume: volume / 100 });
     }
     
-    // Call onClose when closing chat if provided
     if (!newIsOpen && onClose) {
       onClose();
     }
@@ -120,7 +115,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     setIsSoundEnabled(!isSoundEnabled);
   };
 
-  // Handle incoming message from search box
   const handleIncomingMessage = (query: string) => {
     if (query.trim()) {
       const userMessage: Message = {
@@ -156,7 +150,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     setConversation([...conversation, userMessage]);
     setMessage('');
     
-    // Play sound when sending message
     playSoundEffect('beep');
     
     handleGeminiResponse(message);
@@ -166,7 +159,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     setIsLoading(true);
 
     try {
-      // Call our Edge Function
       const { data, error } = await supabase.functions.invoke('gemini-wellness-chatbot', {
         body: { 
           message: userMessage,
@@ -178,7 +170,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         throw new Error(error.message);
       }
       
-      // Play success sound on successful response
       playSoundEffect('success');
       
       const aiMessage: Message = {
@@ -194,7 +185,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
       setConversation(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error fetching Gemini response:', error);
-      // Play error sound on failure
       playSoundEffect('failure');
       
       toast({
@@ -216,7 +206,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     }
   };
 
-  // Fix handleAddWorkout with proper fields and user check
   const handleAddWorkout = async (workout: any) => {
     try {
       if (!user || !user.id) {
@@ -227,14 +216,13 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         });
         return;
       }
-
-      // Extract workout details, ensure correct Supabase column names
+      
       const workoutData = {
         user_id: user.id,
-        title: workout.name || "Custom Workout",
-        type: workout.target || "General",
-        duration: workout.duration || 30, // Use duration from workout if available or default
-        calories_burned: workout.calories_burned || 300,
+        title: workout.name || workout.title || "Custom Workout",
+        type: workout.target || workout.type || "General",
+        duration: workout.duration || 30,
+        calories_burned: workout.calories_burned || workout.calories || 300,
         date: new Date().toISOString().split('T')[0]
       };
 
@@ -264,7 +252,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     }
   };
 
-  // Fix handleSaveRecipe with proper user id and correct nutrition_logs columns
   const handleSaveRecipe = async (recipe: any) => {
     try {
       if (!user || !user.id) {
@@ -276,15 +263,13 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      // Extract recipe details, match columns in nutrition_logs table
-      // Defensive: ensure required fields exist and are numbers for nutrition values, fallback to 0 if missing
       const nutritionData = {
         user_id: user.id,
-        food_name: recipe.title || "Custom Recipe",
-        calories: recipe.nutrition?.calories ? Math.floor(recipe.nutrition.calories) : 300,
-        protein: recipe.nutrition?.protein ? Math.floor(recipe.nutrition.protein) : 25,
-        carbs: recipe.nutrition?.carbs ? Math.floor(recipe.nutrition.carbs) : 40,
-        fat: recipe.nutrition?.fat ? Math.floor(recipe.nutrition.fat) : 15,
+        food_name: recipe.title || recipe.name || "Custom Recipe",
+        calories: recipe.nutrition?.calories ? Math.floor(Number(recipe.nutrition.calories)) : 300,
+        protein: recipe.nutrition?.protein ? Math.floor(Number(recipe.nutrition.protein)) : 25,
+        carbs: recipe.nutrition?.carbs ? Math.floor(Number(recipe.nutrition.carbs)) : 40,
+        fat: recipe.nutrition?.fat ? Math.floor(Number(recipe.nutrition.fat)) : 15,
         meal_type: "recipe",
         date: new Date().toISOString().split('T')[0]
       };
@@ -323,7 +308,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     setMessage(suggestion);
   };
 
-  // Expose the handleIncomingMessage method
   React.useEffect(() => {
     if (window) {
       (window as any).geminiChatRef = {
@@ -337,7 +321,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     };
   }, [conversation]);
 
-  // Save chat history to localStorage on conversation change
   useEffect(() => {
     if (typeof window !== "undefined" && conversation.length > 0) {
       try {
@@ -367,7 +350,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
             transition={{ duration: 0.2 }}
             className="fixed bottom-20 right-6 bg-white rounded-xl shadow-2xl w-[90vw] sm:w-[400px] max-h-[600px] flex flex-col z-50 overflow-hidden"
           >
-            {/* Chat Header */}
             <div className="flex items-center justify-between bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 rounded-t-xl">
               <div className="flex items-center">
                 <Avatar className="h-8 w-8 mr-2 bg-white">
@@ -422,7 +404,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
               </div>
             </div>
             
-            {/* Sound settings panel */}
             <AnimatePresence>
               {isSoundEnabled && (
                 <motion.div
@@ -447,7 +428,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
               )}
             </AnimatePresence>
             
-            {/* Chat Messages */}
             <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
               <div className="space-y-4">
                 <GeminiMessageList 
@@ -470,12 +450,10 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
               </div>
             </div>
             
-            {/* Suggested Questions */}
             {conversation.length < 3 && (
               <GeminiSuggestions onSelectSuggestion={handleSelectSuggestion} />
             )}
             
-            {/* Chat Input */}
             <GeminiChatInput 
               message={message}
               setMessage={setMessage}
