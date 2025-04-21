@@ -208,7 +208,8 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
 
   const handleAddWorkout = async (workout: any) => {
     try {
-      if (!user || !user.id) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save workout plans",
@@ -217,9 +218,8 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      const userId = typeof user.id === 'string' ? user.id : String(user.id);
-
-      if (!userId || userId.length === 0) {
+      const userId = user.id;
+      if (!userId) {
         toast({
           title: "Invalid user ID",
           description: "User ID is not valid. Please sign out and sign in again.",
@@ -243,7 +243,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         console.error("Error adding workout:", error);
         throw error;
       }
-      
+
       playSoundEffect('success');
       toast({
         title: "Workout Added",
@@ -265,7 +265,8 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
 
   const handleSaveRecipe = async (recipe: any) => {
     try {
-      if (!user || !user.id) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save recipes",
@@ -274,9 +275,8 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      const userId = typeof user.id === 'string' ? user.id : String(user.id);
-
-      if (!userId || userId.length === 0) {
+      const userId = user.id;
+      if (!userId) {
         toast({
           title: "Invalid user ID",
           description: "User ID is not valid. Please sign out and sign in again.",
@@ -308,7 +308,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         title: "Recipe Saved",
         description: "The recipe has been saved to your nutrition logs",
       });
-      
+
       navigate('/nutrition');
 
     } catch (error: any) {
