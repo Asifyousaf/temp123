@@ -1,3 +1,6 @@
+
+// Update handleAddWorkout and handleSaveRecipe to correctly get user ID for inserting workouts and recipes.
+
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Loader2, X, Volume2, VolumeX, Info } from 'lucide-react';
@@ -218,8 +221,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      const userId = user.id;
-      if (!userId) {
+      if (!user.id) {
         toast({
           title: "Invalid user ID",
           description: "User ID is not valid. Please sign out and sign in again.",
@@ -229,7 +231,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
       }
 
       const workoutData = {
-        user_id: userId,
+        user_id: user.id,
         title: workout.name || workout.title || "Custom Workout",
         type: workout.target || workout.type || "General",
         duration: workout.duration || 30,
@@ -250,6 +252,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         description: "The workout has been added to your workout plan",
       });
 
+      // Navigate to workout tracker as existing code
       navigate('/workout-tracker');
 
     } catch (error: any) {
@@ -275,8 +278,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      const userId = user.id;
-      if (!userId) {
+      if (!user.id) {
         toast({
           title: "Invalid user ID",
           description: "User ID is not valid. Please sign out and sign in again.",
@@ -286,7 +288,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
       }
 
       const nutritionData = {
-        user_id: userId,
+        user_id: user.id,
         food_name: recipe.title || recipe.name || "Custom Recipe",
         calories: recipe.nutrition?.calories ? Math.floor(Number(recipe.nutrition.calories)) : 300,
         protein: recipe.nutrition?.protein ? Math.floor(Number(recipe.nutrition.protein)) : 25,
@@ -491,3 +493,4 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
 };
 
 export default GeminiChat;
+

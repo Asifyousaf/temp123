@@ -1,4 +1,3 @@
-
 // Fix Chat History Persistence and Recipe Button Restoration
 // We'll load chat history from localStorage on mount and save on any conversation change
 // Also ensure the RecipePreview button is triggered and visible
@@ -260,7 +259,8 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
 
   const handleAddWorkout = async (workoutPlan: any) => {
     try {
-      if (!user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save workout plans",
@@ -269,38 +269,79 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
         return;
       }
 
-      // Extract workout details
       const workoutData = {
         user_id: user.id,
-        title: workoutPlan.title,
-        type: workoutPlan.type,
-        duration: 30, // Default duration
-        calories_burned: 300, // Default calories
+        title: workoutPlan.title || workoutPlan.name || "Custom Workout",
+        type: workoutPlan.type || workoutPlan.workoutType || "General",
+        duration: workoutPlan.duration || 30, // Use provided duration or default
+        calories_burned: workoutPlan.calories_burned || 300,
         date: new Date().toISOString().split('T')[0]
       };
 
-      // Save to Supabase
       const { error } = await supabase.from('workouts').insert(workoutData);
 
       if (error) throw error;
-      
-      // Play success sound
+
       playSoundEffect('success');
-      
+
       toast({
         title: "Workout Added",
         description: "The workout plan has been added to your routines",
       });
     } catch (error) {
-      // Play error sound
       playSoundEffect('failure');
-      
+
       toast({
         title: "Error",
         description: "Failed to add workout plan",
         variant: "destructive"
       });
       console.error('Error saving workout:', error);
+    }
+  };
+
+  const handleSaveRecipe = async (recipe: any) => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in to save recipes",
+          variant: "default",
+        });
+        return;
+      }
+
+      const nutritionData = {
+        user_id: user.id,
+        food_name: recipe.title || recipe.name || "Custom Recipe",
+        calories: recipe.calories ? Math.floor(Number(recipe.calories)) : (recipe.nutrition?.calories ? Math.floor(Number(recipe.nutrition.calories)) : 300),
+        protein: recipe.protein ? Math.floor(Number(recipe.protein)) : (recipe.nutrition?.protein ? Math.floor(Number(recipe.nutrition.protein)) : 25),
+        carbs: recipe.carbs ? Math.floor(Number(recipe.carbs)) : (recipe.nutrition?.carbs ? Math.floor(Number(recipe.nutrition.carbs)) : 40),
+        fat: recipe.fat ? Math.floor(Number(recipe.fat)) : (recipe.nutrition?.fat ? Math.floor(Number(recipe.nutrition.fat)) : 15),
+        meal_type: "recipe",
+        date: new Date().toISOString().split('T')[0]
+      };
+
+      const { error } = await supabase.from('nutrition_logs').insert(nutritionData);
+
+      if (error) throw error;
+
+      playSoundEffect('success');
+
+      toast({
+        title: "Recipe Saved",
+        description: "The recipe has been saved to your nutrition logs",
+      });
+    } catch (error) {
+      playSoundEffect('failure');
+
+      toast({
+        title: "Error",
+        description: "Failed to save recipe. Please try again.",
+        variant: "destructive"
+      });
+      console.error('Error saving recipe:', error);
     }
   };
 
@@ -422,4 +463,3 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
 };
 
 export default AISupportChat;
-

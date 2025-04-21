@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dumbbell, Play, Filter, Search, Clock, ArrowLeft } from 'lucide-react';
@@ -7,7 +6,6 @@ import { toast } from "@/components/ui/use-toast";
 import Layout from '../components/Layout';
 import WorkoutSession from '../components/WorkoutSession';
 
-// Sample workout plans
 const workoutPlans = [
   {
     id: "1",
@@ -218,8 +216,16 @@ const WorkoutsPage = () => {
   const handleCompleteWorkout = async (workoutData) => {
     try {
       if (!session) return;
-      
-      // Modified to match the database schema (only include fields that exist in the workouts table)
+
+      if (!workoutData.exercises || !Array.isArray(workoutData.exercises) || workoutData.exercises.length === 0) {
+        toast({
+          title: "Workout Data Missing",
+          description: "No exercises found in this workout plan.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const { error } = await supabase.from('workouts').insert({
         user_id: session.user.id,
         title: workoutData.title,
@@ -307,7 +313,6 @@ const WorkoutsPage = () => {
         </div>
       </div>
 
-      {/* Filter and Search Section */}
       <div className="bg-white py-6 border-b">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
           <div className="flex items-center mb-4 md:mb-0">
@@ -355,7 +360,6 @@ const WorkoutsPage = () => {
         </div>
       </div>
 
-      {/* Workouts Grid */}
       <div className="py-12 bg-gray-50">
         <div className="container mx-auto px-4">
           <h2 className="text-2xl font-bold mb-8">Recommended Workouts</h2>

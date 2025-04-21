@@ -1,1 +1,8 @@
+
 project_id = "knlcoxqeqhrcvqsussca"
+
+[functions.wellness-chatbot]
+verify_jwt = false
+
+[functions.gemini-wellness-chatbot]
+verify_jwt = false
