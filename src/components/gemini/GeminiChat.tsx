@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Loader2, X, Volume2, VolumeX, Info } from 'lucide-react';
@@ -210,58 +209,23 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     }
   };
 
-  // Use session.user.id directly on inserts to avoid calling getUser() which may cause mismatch issues
   const handleAddWorkout = async (workout: any) => {
-    try {
-      if (!session?.user?.id) {
-        toast({
-          title: "Sign in required",
-          description: "Please sign in to save workout plans",
-          variant: "default",
-        });
-        return;
-      }
-
-      // Defensive: workout may be from AI, so check and normalize properties
-      const title = workout.title || workout.name || "Custom Workout";
-      const type = workout.type || workout.target || workout.workoutType || "General";
-      const duration = workout.duration ?? 30;
-      // calories_burned might be named calories or calories_burned
-      const calories_burned = workout.calories_burned ?? workout.calories ?? 300;
-
-      const workoutData = {
-        user_id: session.user.id,
-        title: title,
-        type: type,
-        duration: duration,
-        calories_burned: calories_burned,
-        date: new Date().toISOString().split('T')[0]
-      };
-
-      const { error } = await supabase.from('workouts').insert(workoutData);
-
-      if (error) {
-        console.error("Error adding workout:", error);
-        throw error;
-      }
-
-      playSoundEffect('success');
+    if (!session?.user?.id) {
       toast({
-        title: "Workout Added",
-        description: "The workout has been added to your workout plan",
+        title: "Sign in required",
+        description: "Please sign in to save workout plans",
+        variant: "default",
       });
-
-      navigate('/workout-tracker');
-
-    } catch (error: any) {
-      playSoundEffect('failure');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add workout",
-        variant: "destructive"
-      });
-      console.error('Error saving workout:', error);
+      return;
     }
+
+    const title = workout.title || workout.name || "Custom Workout";
+    const type = workout.type || workout.target || workout.workoutType || "General";
+    const duration = workout.duration ?? 30;
+    const calories_burned = workout.calories_burned ?? workout.calories ?? 300;
+
+    navigate('/workouts', { state: { workoutToAdd: { title, type, duration, calories_burned }, fromChat: true } });
+    setIsOpen(false);
   };
 
   const handleSaveRecipe = async (recipe: any) => {
@@ -305,7 +269,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
       playSoundEffect('failure');
       toast({
         title: "Error",
-        description: error.message || "Failed to save recipe. Please try again.",
+        description: error.message || "Failed to save recipe",
         variant: "destructive"
       });
       console.error('Error saving recipe:', error);
