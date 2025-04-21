@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 import { PlusCircle, Calendar, LineChart, Dumbbell } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import WorkoutForm from '../components/WorkoutForm';
@@ -19,10 +19,9 @@ const WorkoutTrackerPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
   const [userWorkouts, setUserWorkouts] = useState<any[]>([]);
-  const [aiWorkouts, setAIWorkouts] = useState<any[]>([]); // AI generated workouts with exercises
+  const [aiWorkouts, setAIWorkouts] = useState<any[]>([]);
   const navigate = useNavigate();
 
-  // Fetch user session on mount
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -38,7 +37,6 @@ const WorkoutTrackerPage = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Redirect if no session after load
   useEffect(() => {
     if (!isLoading && !session) {
       toast({
@@ -50,7 +48,6 @@ const WorkoutTrackerPage = () => {
     }
   }, [session, isLoading, navigate]);
 
-  // Fetch user workouts from supabase
   const fetchUserWorkouts = useCallback(async () => {
     if (!session?.user?.id) {
       setUserWorkouts([]);
@@ -111,7 +108,6 @@ const WorkoutTrackerPage = () => {
   const handleStartWorkout = (workout: any, isAI = false) => {
     // Defensive: Ensure workout has exercises array
     if (isAI && (!workout.exercises || workout.exercises.length === 0)) {
-      // If AI workout missing exercises, set dummy simple exercises for demo
       workout.exercises = [
         {
           name: "Jumping Jacks",
@@ -132,8 +128,8 @@ const WorkoutTrackerPage = () => {
     setActiveView('active-workout');
   };
 
-  // Provide example AI workouts with exercises arrays to prevent empty exercises error
   useEffect(() => {
+    // Ensure AI workouts include exercises arrays to avoid no exercises error
     setAIWorkouts([
       {
         id: 'ai-1',
@@ -251,7 +247,6 @@ const WorkoutTrackerPage = () => {
             {activeView === 'summary' && (
               <>
                 <div className="mb-6 space-y-6">
-                  {/* User Workouts Section */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center">
@@ -278,7 +273,6 @@ const WorkoutTrackerPage = () => {
                     </CardContent>
                   </Card>
 
-                  {/* AI Generated Workouts Section */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center">
@@ -319,7 +313,6 @@ const WorkoutTrackerPage = () => {
             {activeView === 'start-workout' && <WorkoutList onSelectWorkout={handleStartWorkout} />}
           </>
         ) : (
-          // Show active workout session
           <WorkoutSession
             workout={activeWorkout}
             onComplete={handleWorkoutComplete}
@@ -332,4 +325,3 @@ const WorkoutTrackerPage = () => {
 };
 
 export default WorkoutTrackerPage;
-

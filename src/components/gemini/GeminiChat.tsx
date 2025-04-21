@@ -1,6 +1,4 @@
 
-// Update handleAddWorkout and handleSaveRecipe to correctly get user ID for inserting workouts and recipes.
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Loader2, X, Volume2, VolumeX, Info } from 'lucide-react';
@@ -67,6 +65,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [volume, setVolume] = useState(50);
   
@@ -77,14 +76,16 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
   }, [visible]);
   
   useEffect(() => {
-    const getUser = async () => {
+    const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
       setUser(session?.user || null);
     };
     
-    getUser();
+    getSession();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
       setUser(session?.user || null);
     });
     
@@ -150,7 +151,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
       timestamp: new Date()
     };
 
-    setConversation([...conversation, userMessage]);
+    setConversation(prev => [...prev, userMessage]);
     setMessage('');
     
     playSoundEffect('beep');
@@ -209,10 +210,10 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     }
   };
 
+  // Use session.user.id directly on inserts to avoid calling getUser() which may cause mismatch issues
   const handleAddWorkout = async (workout: any) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
+      if (!session?.user?.id) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save workout plans",
@@ -221,17 +222,8 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      if (!user.id) {
-        toast({
-          title: "Invalid user ID",
-          description: "User ID is not valid. Please sign out and sign in again.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       const workoutData = {
-        user_id: user.id,
+        user_id: session.user.id,
         title: workout.name || workout.title || "Custom Workout",
         type: workout.target || workout.type || "General",
         duration: workout.duration || 30,
@@ -252,7 +244,6 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         description: "The workout has been added to your workout plan",
       });
 
-      // Navigate to workout tracker as existing code
       navigate('/workout-tracker');
 
     } catch (error: any) {
@@ -268,8 +259,7 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
 
   const handleSaveRecipe = async (recipe: any) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
+      if (!session?.user?.id) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save recipes",
@@ -278,17 +268,8 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      if (!user.id) {
-        toast({
-          title: "Invalid user ID",
-          description: "User ID is not valid. Please sign out and sign in again.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       const nutritionData = {
-        user_id: user.id,
+        user_id: session.user.id,
         food_name: recipe.title || recipe.name || "Custom Recipe",
         calories: recipe.nutrition?.calories ? Math.floor(Number(recipe.nutrition.calories)) : 300,
         protein: recipe.nutrition?.protein ? Math.floor(Number(recipe.nutrition.protein)) : 25,
@@ -493,4 +474,3 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
 };
 
 export default GeminiChat;
-
