@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Play, Pause, SkipForward, ChevronRight, Check, XCircle, Clock, Dumbbell, Flame } from 'lucide-react';
@@ -50,11 +51,14 @@ const exerciseImages = {
   "Sun Salutation (Surya Namaskar)": "https://cdn.dribbble.com/users/2931468/screenshots/5720362/media/e87bb48393c8202ff31e10056bbb413c.gif",
   "Warrior II (Virabhadrasana II)": "https://cdn.dribbble.com/users/2106177/screenshots/6834350/warrior2_dr.gif",
   "Tree Pose (Vrksasana)": "https://www.yogadukaan.com/blog/wp-content/uploads/2023/04/Vrikshasana-basic-steps-benefits.gif",
-  // Default image for exercises without specific illustrations
+  
   "default": "https://www.inspireusafoundation.org/wp-content/uploads/2022/03/jumping-jacks-benefits.gif"
 };
 
 const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) => {
+  // Defensive: if exercises is missing or empty, default to empty array
+  const exercises = Array.isArray(workout?.exercises) ? workout.exercises : [];
+
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [currentSet, setCurrentSet] = useState(1);
   const [isResting, setIsResting] = useState(false);
@@ -66,10 +70,10 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
   const [animateTimer, setAnimateTimer] = useState(false);
   const timerRef = useRef<any>(null);
 
-  const currentExercise = workout.exercises[currentExerciseIndex];
-  const totalExercises = workout.exercises.length;
-  const progress = Math.round((completedExercises / totalExercises) * 100);
-  
+  const currentExercise = exercises[currentExerciseIndex];
+  const totalExercises = exercises.length;
+  const progress = totalExercises > 0 ? Math.round((completedExercises / totalExercises) * 100) : 0;
+
   // Get exercise image
   const getExerciseImage = (exerciseName: string) => {
     return exerciseImages[exerciseName] || exerciseImages.default;
@@ -99,7 +103,7 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
   }, [isPaused]);
 
   useEffect(() => {
-    if (timeLeft === 0 && !isPaused) {
+    if (timeLeft === 0 && !isPaused && currentExercise) {
       if (isResting) {
         // Rest is over, move to next set or exercise
         setIsResting(false);
@@ -124,16 +128,18 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
         }
       }
     }
-  }, [timeLeft, isPaused]);
+  }, [timeLeft, isPaused, currentExercise, isResting]);
 
   useEffect(() => {
-    // Initialize time for first exercise
+    // Initialize time for first exercise or when exercise changes
     resetExerciseTimer();
   }, [currentExerciseIndex]);
 
   const resetExerciseTimer = () => {
-    if (currentExerciseIndex < workout.exercises.length) {
+    if (currentExercise) {
       setTimeLeft(isResting ? currentExercise.restTime : currentExercise.duration);
+    } else {
+      setTimeLeft(0);
     }
   };
 
@@ -142,17 +148,17 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
   };
 
   const handleNextExercise = () => {
-    if (currentExerciseIndex < workout.exercises.length - 1) {
+    if (currentExerciseIndex < totalExercises - 1) {
       // Mark current exercise as completed
-      const exerciseName = workout.exercises[currentExerciseIndex].name;
+      const exerciseName = currentExercise?.name || "";
       setCompletedExerciseDetails(prev => ({
         ...prev,
         [exerciseName]: true
       }));
-      
+
       // Update completed exercises count
       setCompletedExercises(prev => prev + 1);
-      
+
       // Move to next exercise
       setCurrentExerciseIndex(prev => prev + 1);
       setCurrentSet(1);
@@ -161,8 +167,8 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
     } else {
       // Workout complete
       // Mark last exercise as completed if it's not already
-      const exerciseName = workout.exercises[currentExerciseIndex].name;
-      if (!completedExerciseDetails[exerciseName]) {
+      const exerciseName = currentExercise?.name || "";
+      if (exerciseName && !completedExerciseDetails[exerciseName]) {
         setCompletedExerciseDetails(prev => ({
           ...prev,
           [exerciseName]: true
@@ -174,10 +180,10 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
   };
 
   const handleCompleteExercise = () => {
-    const exerciseName = workout.exercises[currentExerciseIndex].name;
+    const exerciseName = currentExercise?.name || "";
     
     // Only mark as completed if not already completed
-    if (!completedExerciseDetails[exerciseName]) {
+    if (exerciseName && !completedExerciseDetails[exerciseName]) {
       setCompletedExerciseDetails(prev => ({
         ...prev,
         [exerciseName]: true
@@ -186,7 +192,7 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
     }
     
     // Move to next exercise
-    if (currentExerciseIndex < workout.exercises.length - 1) {
+    if (currentExerciseIndex < totalExercises - 1) {
       setCurrentExerciseIndex(prev => prev + 1);
       setCurrentSet(1);
       setIsResting(false);
@@ -197,14 +203,11 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
   };
 
   const handleComplete = async () => {
-    // Calculate calories based on progress and time spent
-    const minutesSpent = Math.max(Math.round(totalTimeElapsed / 60), 1); // Ensure at least 1 minute
-    
-    // Calculate calories based on completion percentage and minimum threshold
-    const completionPercentage = completedExercises / totalExercises;
-    const minCaloriePercentage = 0.3; // Minimum 30% of calories even if just started
-    
-    // Calculate estimated calories - ensures some calories are counted even if completed early
+    const minutesSpent = Math.max(Math.round(totalTimeElapsed / 60), 1);
+
+    const completionPercentage = totalExercises > 0 ? completedExercises / totalExercises : 0;
+    const minCaloriePercentage = 0.3;
+
     const estimatedCalories = Math.round(
       workout.caloriesBurn * Math.max(
         completionPercentage,
@@ -212,24 +215,41 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
         minCaloriePercentage
       )
     );
-    
-    // Updated to match database schema - only include fields that exist in the workouts table
+
     const workoutData = {
       title: workout.title,
       type: workout.type,
       duration: minutesSpent,
       calories_burned: estimatedCalories
     };
-    
+
     toast({
       title: "Workout Complete!",
       description: `You burned approximately ${estimatedCalories} calories in ${minutesSpent} minutes.`,
     });
-    
+
     onComplete(workoutData);
   };
 
-  
+  if (totalExercises === 0) {
+    return (
+      <Card className="w-full border-2 border-purple-100">
+        <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50">
+          <CardTitle>No Exercises Available</CardTitle>
+          <CardDescription>This workout has no exercises. Please add exercises to begin the session.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-gray-500">No exercises found in this workout plan.</p>
+          <div className="flex justify-center mt-6">
+            <Button onClick={onCancel} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50">
+              Cancel
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full border-2 border-purple-100">
       <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50">
@@ -256,7 +276,7 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
         </div>
 
         {/* Current exercise */}
-        {currentExerciseIndex < workout.exercises.length ? (
+        {currentExerciseIndex < totalExercises && currentExercise ? (
           <div className="space-y-6">
             <div className="bg-gray-50 rounded-lg p-6 shadow-sm">
               <div className="flex justify-between items-center mb-4">
@@ -299,6 +319,7 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
                     </Button>
                     <Button 
                       onClick={() => {
+                        if (!currentExercise) return;
                         if (isResting) {
                           setIsResting(false);
                           setTimeLeft(currentExercise.duration);
@@ -403,7 +424,7 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
           <XCircle className="mr-2 h-4 w-4" />
           Cancel Workout
         </Button>
-        {currentExerciseIndex >= workout.exercises.length ? (
+        {currentExerciseIndex >= totalExercises ? (
           <Button onClick={handleComplete} className="bg-purple-600 hover:bg-purple-700">
             <Check className="mr-2 h-4 w-4" />
             Complete Workout
