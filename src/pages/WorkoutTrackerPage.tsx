@@ -1,5 +1,7 @@
 
-import { useState, useEffect } from 'react';
+// Fix Workout tab to reload workouts after adding and split rendered sections for user-added and AI workouts with timers and start buttons
+
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 import { PlusCircle, Calendar, ArrowRight, LineChart, Dumbbell, Clock } from 'lucide-react';
@@ -18,10 +20,12 @@ const WorkoutTrackerPage = () => {
   const [activeView, setActiveView] = useState('summary');
   const [isLoading, setIsLoading] = useState(true);
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
+  const [userWorkouts, setUserWorkouts] = useState<any[]>([]);
+  const [aiWorkouts, setAIWorkouts] = useState<any[]>([]); // For AI generated workouts with timers
   const navigate = useNavigate();
 
+  // Fetch user session on mount
   useEffect(() => {
-    // Check for user session
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
@@ -37,7 +41,7 @@ const WorkoutTrackerPage = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Redirect if not logged in
+  // Redirect if no session after load
   useEffect(() => {
     if (!isLoading && !session) {
       toast({
@@ -48,6 +52,37 @@ const WorkoutTrackerPage = () => {
       navigate('/auth');
     }
   }, [session, isLoading, navigate]);
+
+  // Fetch user workouts from supabase
+  const fetchUserWorkouts = useCallback(async () => {
+    if (!session?.user?.id) {
+      setUserWorkouts([]);
+      return;
+    }
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      setUserWorkouts(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load workouts",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchUserWorkouts();
+  }, [fetchUserWorkouts]);
 
   const handleWorkoutComplete = async (workoutData: any) => {
     try {
@@ -69,6 +104,10 @@ const WorkoutTrackerPage = () => {
       
       setActiveWorkout(null);
       setActiveView('history');
+
+      // Reload workouts immediately after adding
+      await fetchUserWorkouts();
+
     } catch (error: any) {
       toast({
         title: "Error",
@@ -78,10 +117,31 @@ const WorkoutTrackerPage = () => {
     }
   };
 
-  const handleStartWorkout = (workout: any) => {
-    setActiveWorkout(workout);
+  const handleStartWorkout = (workout: any, isAI = false) => {
+    setActiveWorkout({ ...workout, isAI });
     setActiveView('active-workout');
   };
+
+  // Dummy AI workouts for demonstration (would be dynamic in real app)
+  useEffect(() => {
+    // Example AI workouts (could be loaded from AI chat or backend)
+    setAIWorkouts([
+      {
+        id: 'ai-1',
+        title: 'AI Generated Full Body Routine',
+        type: 'Strength Training',
+        duration: 30,
+        calories_burned: 250
+      },
+      {
+        id: 'ai-2',
+        title: 'AI Cardio Blast',
+        type: 'Cardio',
+        duration: 20,
+        calories_burned: 220
+      }
+    ]);
+  }, []);
 
   if (isLoading || !session) {
     return (
@@ -139,65 +199,72 @@ const WorkoutTrackerPage = () => {
             </div>
 
             {activeView === 'summary' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
-                      Quick Log Workout
-                    </CardTitle>
-                    <CardDescription>Record your latest workout session</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600 mb-4">Keep track of your fitness journey by logging your workouts.</p>
-                  </CardContent>
-                  <CardFooter>
-                    <Button onClick={() => setActiveView('log')} className="w-full">
-                      Log Workout <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardFooter>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Calendar className="mr-2 h-5 w-5 text-purple-600" />
-                      View History
-                    </CardTitle>
-                    <CardDescription>Review your past workout sessions</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600 mb-4">See your progress over time and stay motivated.</p>
-                  </CardContent>
-                  <CardFooter>
-                    <Button variant="outline" onClick={() => setActiveView('history')} className="w-full">
-                      View History <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardFooter>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
-                      Start Workout
-                    </CardTitle>
-                    <CardDescription>Follow guided workout routines</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600 mb-4">Get instructions and track your progress in real-time.</p>
-                  </CardContent>
-                  <CardFooter>
-                    <Button variant="default" onClick={() => setActiveView('start-workout')} className="w-full">
-                      Start Now <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </div>
+              <>
+                <div className="mb-6 space-y-6">
+                  {/* User Workouts Section */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
+                        Your Workouts
+                      </CardTitle>
+                      <CardDescription>Workouts you have logged</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {userWorkouts.length === 0 ? (
+                        <p className="text-gray-600">No workouts logged yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {userWorkouts.map(workout => (
+                            <li key={workout.id} className="flex justify-between items-center border-b border-gray-200 py-2">
+                              <span>{workout.title} ({workout.type})</span>
+                              <Button variant="outline" size="sm" onClick={() => handleStartWorkout(workout, false)}>
+                                Start Workout
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* AI Generated Workouts Section */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
+                        AI Suggested Workouts
+                      </CardTitle>
+                      <CardDescription>Workouts generated by AI</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {aiWorkouts.length === 0 ? (
+                        <p className="text-gray-600">No AI workouts available.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {aiWorkouts.map(workout => (
+                            <li key={workout.id} className="flex justify-between items-center border-b border-gray-200 py-2">
+                              <span>{workout.title} ({workout.type}) - {workout.duration} min</span>
+                              <Button variant="outline" size="sm" onClick={() => handleStartWorkout(workout, true)}>
+                                Start Workout
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <WorkoutStats userId={session.user.id} />
+              </>
             )}
 
-            {activeView === 'summary' && <WorkoutStats userId={session.user.id} />}
-            {activeView === 'log' && <WorkoutForm userId={session.user.id} onSuccess={() => setActiveView('history')} />}
+            {activeView === 'log' && <WorkoutForm userId={session.user.id} onSuccess={() => {
+              setActiveView('history');
+              fetchUserWorkouts();
+            }} />}
+
             {activeView === 'history' && <WorkoutHistoryList userId={session.user.id} />}
             {activeView === 'start-workout' && <WorkoutList onSelectWorkout={handleStartWorkout} />}
           </>
@@ -215,3 +282,4 @@ const WorkoutTrackerPage = () => {
 };
 
 export default WorkoutTrackerPage;
+

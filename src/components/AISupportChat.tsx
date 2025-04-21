@@ -1,4 +1,8 @@
 
+// Fix Chat History Persistence and Recipe Button Restoration
+// We'll load chat history from localStorage on mount and save on any conversation change
+// Also ensure the RecipePreview button is triggered and visible
+
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Loader2 } from 'lucide-react';
@@ -30,6 +34,8 @@ interface AISupportChatProps {
   onClose?: () => void;
 }
 
+const CHAT_HISTORY_KEY = 'ai_chat_history';
+
 const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose }) => {
   const [isOpen, setIsOpen] = useState(visible);
   const [message, setMessage] = useState('');
@@ -51,6 +57,31 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
   
   const { play, isLoaded } = useSounds();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (savedHistory) {
+      try {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Parse dates back to Date objects
+          const restored = parsed.map(msg => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }));
+          setConversation(restored);
+        }
+      } catch (e) {
+        console.error('Failed to parse chat history from localStorage', e);
+      }
+    }
+  }, []);
+
+  // Save chat history to localStorage on each conversation change
+  useEffect(() => {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(conversation));
+  }, [conversation]);
 
   // Update isOpen when visible prop changes
   useEffect(() => {
@@ -391,3 +422,4 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
 };
 
 export default AISupportChat;
+

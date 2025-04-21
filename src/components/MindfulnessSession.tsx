@@ -1,4 +1,6 @@
 
+// Fix build error by importing SoundType from the sound types definition
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, Volume2, VolumeX, Clock, Waves, SkipForward, Music } from 'lucide-react';
 import { toast } from "@/components/ui/use-toast";
 import useSounds from '../hooks/useSounds';
+import type { SoundType } from '../types/sound';
 
 interface MindfulnessSessionProps {
   sessionType: string;
@@ -25,11 +28,11 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({ 
-  sessionType, 
-  duration, 
-  onComplete, 
-  onCancel 
+const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
+  sessionType,
+  duration,
+  onComplete,
+  onCancel
 }) => {
   const [isPaused, setIsPaused] = useState(true);
   const [timeLeft, setTimeLeft] = useState(duration * 60); // convert minutes to seconds
@@ -90,7 +93,7 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
     return () => {
       if (intervalChimes) clearInterval(intervalChimes);
     };
-  }, [isPaused, isLoaded.chimes]);
+  }, [isPaused, isLoaded.chimes, timeLeft, duration, isMuted, volume]);
 
   const handlePlayPause = () => {
     if (isPaused) {
@@ -187,10 +190,10 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
     setSoundTestStatus('testing');
     
     // Try all sounds until one works
-    const soundTypes: SoundType[] = ['chimes', 'beep', 'notification', 'success'];
+    const soundTestTypes: SoundType[] = ['chimes', 'beep', 'notification', 'success'];
     
     const trySound = (index: number) => {
-      if (index >= soundTypes.length) {
+      if (index >= soundTestTypes.length) {
         setSoundTestStatus('failed');
         toast({
           title: "Sound Test Failed",
@@ -200,8 +203,8 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
         return;
       }
       
-      const soundType = soundTypes[index];
-      const audio = play(soundType, { volume: 1.0 });
+      const sType = soundTestTypes[index];
+      const audio = play(sType, { volume: 1.0 });
       
       if (audio) {
         audio.onended = () => {
@@ -461,3 +464,4 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
 };
 
 export default MindfulnessSession;
+
