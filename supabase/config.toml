@@ -1,0 +1,28 @@
+
+project_id = "lovable"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+
+[functions]
+[functions.wellness-chatbot]
+verify_jwt = false
+[functions.gemini-wellness-chatbot]
+verify_jwt = false
+
