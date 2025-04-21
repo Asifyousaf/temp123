@@ -87,7 +87,7 @@ const WorkoutTrackerPage = () => {
   const handleWorkoutComplete = async (workoutData: any) => {
     try {
       const { error } = await supabase.from('workouts').insert({
-        user_id: session.user.id,
+        user_id: session?.user?.id,
         title: workoutData.title,
         type: workoutData.type,
         duration: workoutData.duration,
@@ -96,17 +96,19 @@ const WorkoutTrackerPage = () => {
       });
 
       if (error) throw error;
-      
+
       toast({
         title: "Workout Completed",
         description: "Your workout has been recorded successfully!",
       });
-      
+
       setActiveWorkout(null);
       setActiveView('history');
 
-      // Reload workouts immediately after adding
-      await fetchUserWorkouts();
+      // Reload workouts immediately after adding to refresh UI
+      if (fetchUserWorkouts) {
+        await fetchUserWorkouts();
+      }
 
     } catch (error: any) {
       toast({

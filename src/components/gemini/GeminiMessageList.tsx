@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Message } from './GeminiChat';
 import GeminiMessageItem from './GeminiMessageItem';
@@ -12,11 +11,11 @@ interface GeminiMessageListProps {
   onSaveRecipe?: (recipe: any) => void;
 }
 
-const GeminiMessageList: React.FC<GeminiMessageListProps> = ({ 
-  messages, 
-  isLoading, 
+const GeminiMessageList: React.FC<GeminiMessageListProps> = ({
+  messages,
+  isLoading,
   onAddWorkout,
-  onSaveRecipe 
+  onSaveRecipe
 }) => {
   return (
     <div className="space-y-4">
@@ -24,16 +23,30 @@ const GeminiMessageList: React.FC<GeminiMessageListProps> = ({
         <div key={message.id}>
           <GeminiMessageItem message={message} />
           {message.workoutData && message.workoutData.length > 0 && (
-            <WorkoutPreview 
-              workoutData={message.workoutData} 
+            <WorkoutPreview
+              workoutData={message.workoutData}
               onAddWorkout={onAddWorkout}
             />
           )}
           {message.recipeData && message.recipeData.length > 0 && (
-            <RecipePreview 
-              recipeData={message.recipeData} 
-              onSaveRecipe={onSaveRecipe}
-            />
+            <div>
+              <RecipePreview
+                recipeData={message.recipeData}
+                onSaveRecipe={onSaveRecipe}
+              />
+              {onSaveRecipe && (
+                <button
+                  onClick={() => {
+                    if (message.recipeData && message.recipeData.length > 0) {
+                      onSaveRecipe(message.recipeData[0]);
+                    }
+                  }}
+                  className="mt-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+                >
+                  Save First Recipe
+                </button>
+              )}
+            </div>
           )}
         </div>
       ))}

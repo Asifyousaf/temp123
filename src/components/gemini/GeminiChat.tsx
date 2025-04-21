@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Loader2, X, Volume2, VolumeX, Info } from 'lucide-react';
@@ -34,14 +33,34 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
   const [isOpen, setIsOpen] = useState(visible);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversation, setConversation] = useState<Message[]>([
-    {
-      id: '0',
-      content: "Hi there! I'm your wellness assistant. How can I help you with workouts, nutrition, or mindfulness today?",
-      sender: 'ai',
-      timestamp: new Date()
+  const [conversation, setConversation] = useState<Message[]>(() => {
+    // Initialize chat history from localStorage if present
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("geminiChatHistory");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return [
+            {
+              id: '0',
+              content: "Hi there! I'm your wellness assistant. How can I help you with workouts, nutrition, or mindfulness today?",
+              sender: 'ai',
+              timestamp: new Date()
+            }
+          ];
+        }
+      }
     }
-  ]);
+    return [
+      {
+        id: '0',
+        content: "Hi there! I'm your wellness assistant. How can I help you with workouts, nutrition, or mindfulness today?",
+        sender: 'ai',
+        timestamp: new Date()
+      }
+    ];
+  });
   const { toast } = useToast();
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -197,9 +216,10 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
     }
   };
 
+  // Fix handleAddWorkout with proper fields and user check
   const handleAddWorkout = async (workout: any) => {
     try {
-      if (!user) {
+      if (!user || !user.id) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save workout plans",
@@ -208,47 +228,46 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      // Extract workout details
+      // Extract workout details, ensure correct Supabase column names
       const workoutData = {
         user_id: user.id,
         title: workout.name || "Custom Workout",
         type: workout.target || "General",
-        duration: 30, // Default duration
-        calories_burned: 300, // Default calories
+        duration: workout.duration || 30, // Use duration from workout if available or default
+        calories_burned: workout.calories_burned || 300,
         date: new Date().toISOString().split('T')[0]
       };
 
-      // Save to Supabase
       const { error } = await supabase.from('workouts').insert(workoutData);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error adding workout:", error);
+        throw error;
+      }
       
-      // Play success sound
       playSoundEffect('success');
-      
       toast({
         title: "Workout Added",
         description: "The workout has been added to your workout plan",
       });
-      
-      // Navigate to the workouts page
-      navigate('/workouts');
-    } catch (error) {
-      // Play error sound
+
+      navigate('/workout-tracker');
+
+    } catch (error: any) {
       playSoundEffect('failure');
-      
       toast({
         title: "Error",
-        description: "Failed to add workout",
+        description: error.message || "Failed to add workout",
         variant: "destructive"
       });
       console.error('Error saving workout:', error);
     }
   };
 
+  // Fix handleSaveRecipe with proper user id and correct nutrition_logs columns
   const handleSaveRecipe = async (recipe: any) => {
     try {
-      if (!user) {
+      if (!user || !user.id) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save recipes",
@@ -257,50 +276,39 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
-      // Extract recipe details - we'll create a custom table for recipes
-      // First check if recipes table exists
-      const { data: tableExists } = await supabase
-        .from('nutrition_logs')
-        .select('id')
-        .limit(1);
+      // Extract recipe details, match columns in nutrition_logs table
+      // Defensive: ensure required fields exist and are numbers for nutrition values, fallback to 0 if missing
+      const nutritionData = {
+        user_id: user.id,
+        food_name: recipe.title || "Custom Recipe",
+        calories: recipe.nutrition?.calories ? Math.floor(recipe.nutrition.calories) : 300,
+        protein: recipe.nutrition?.protein ? Math.floor(recipe.nutrition.protein) : 25,
+        carbs: recipe.nutrition?.carbs ? Math.floor(recipe.nutrition.carbs) : 40,
+        fat: recipe.nutrition?.fat ? Math.floor(recipe.nutrition.fat) : 15,
+        meal_type: "recipe",
+        date: new Date().toISOString().split('T')[0]
+      };
 
-      if (tableExists) {
-        // Save as nutrition log since we don't have a recipes table
-        const nutritionData = {
-          user_id: user.id,
-          food_name: recipe.title || "Custom Recipe",
-          calories: recipe.nutrition?.calories || 300,
-          protein: 25, // Default values
-          carbs: 40,
-          fat: 15,
-          meal_type: "recipe",
-          date: new Date().toISOString().split('T')[0]
-        };
+      const { error } = await supabase.from('nutrition_logs').insert(nutritionData);
 
-        const { error } = await supabase.from('nutrition_logs').insert(nutritionData);
-        
-        if (error) throw error;
-        
-        // Play success sound
-        playSoundEffect('success');
-        
-        toast({
-          title: "Recipe Saved",
-          description: "The recipe has been saved to your nutrition logs",
-        });
-        
-        // Navigate to the nutrition page
-        navigate('/nutrition');
-      } else {
-        throw new Error("Nutrition logs table not available");
+      if (error) {
+        console.error("Error saving recipe:", error);
+        throw error;
       }
-    } catch (error) {
-      // Play error sound
-      playSoundEffect('failure');
+
+      playSoundEffect('success');
+      toast({
+        title: "Recipe Saved",
+        description: "The recipe has been saved to your nutrition logs",
+      });
       
+      navigate('/nutrition');
+
+    } catch (error: any) {
+      playSoundEffect('failure');
       toast({
         title: "Error",
-        description: "Failed to save recipe. Please try again.",
+        description: error.message || "Failed to save recipe. Please try again.",
         variant: "destructive"
       });
       console.error('Error saving recipe:', error);
@@ -327,6 +335,17 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         delete (window as any).geminiChatRef;
       }
     };
+  }, [conversation]);
+
+  // Save chat history to localStorage on conversation change
+  useEffect(() => {
+    if (typeof window !== "undefined" && conversation.length > 0) {
+      try {
+        localStorage.setItem("geminiChatHistory", JSON.stringify(conversation));
+      } catch (e) {
+        console.error("Failed to save chat history to localStorage:", e);
+      }
+    }
   }, [conversation]);
 
   return (
