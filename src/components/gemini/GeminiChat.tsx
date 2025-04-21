@@ -219,6 +219,15 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
 
       const userId = typeof user.id === 'string' ? user.id : String(user.id);
 
+      if (!userId || userId.length === 0) {
+        toast({
+          title: "Invalid user ID",
+          description: "User ID is not valid. Please sign out and sign in again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const workoutData = {
         user_id: userId,
         title: workout.name || workout.title || "Custom Workout",
@@ -266,6 +275,15 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
       }
 
       const userId = typeof user.id === 'string' ? user.id : String(user.id);
+
+      if (!userId || userId.length === 0) {
+        toast({
+          title: "Invalid user ID",
+          description: "User ID is not valid. Please sign out and sign in again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const nutritionData = {
         user_id: userId,
