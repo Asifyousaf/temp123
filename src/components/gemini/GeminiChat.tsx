@@ -222,12 +222,19 @@ const GeminiChat: React.FC<GeminiChatProps> = ({ visible = false, onClose }) => 
         return;
       }
 
+      // Defensive: workout may be from AI, so check and normalize properties
+      const title = workout.title || workout.name || "Custom Workout";
+      const type = workout.type || workout.target || workout.workoutType || "General";
+      const duration = workout.duration ?? 30;
+      // calories_burned might be named calories or calories_burned
+      const calories_burned = workout.calories_burned ?? workout.calories ?? 300;
+
       const workoutData = {
         user_id: session.user.id,
-        title: workout.name || workout.title || "Custom Workout",
-        type: workout.target || workout.type || "General",
-        duration: workout.duration || 30,
-        calories_burned: workout.calories_burned || workout.calories || 300,
+        title: title,
+        type: type,
+        duration: duration,
+        calories_burned: calories_burned,
         date: new Date().toISOString().split('T')[0]
       };
 
