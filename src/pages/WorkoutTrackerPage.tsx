@@ -1,10 +1,8 @@
 
-// Fix Workout tab to reload workouts after adding and split rendered sections for user-added and AI workouts with timers and start buttons
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
-import { PlusCircle, Calendar, ArrowRight, LineChart, Dumbbell, Clock } from 'lucide-react';
+import { PlusCircle, Calendar, LineChart, Dumbbell } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +19,7 @@ const WorkoutTrackerPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
   const [userWorkouts, setUserWorkouts] = useState<any[]>([]);
-  const [aiWorkouts, setAIWorkouts] = useState<any[]>([]); // For AI generated workouts with timers
+  const [aiWorkouts, setAIWorkouts] = useState<any[]>([]); // AI generated workouts with exercises
   const navigate = useNavigate();
 
   // Fetch user session on mount
@@ -31,7 +29,6 @@ const WorkoutTrackerPage = () => {
       setSession(session);
       setIsLoading(false);
     };
-    
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -66,7 +63,6 @@ const WorkoutTrackerPage = () => {
         .select('*')
         .eq('user_id', session.user.id)
         .order('date', { ascending: false });
-      
       if (error) throw error;
       setUserWorkouts(data || []);
     } catch (error: any) {
@@ -86,30 +82,23 @@ const WorkoutTrackerPage = () => {
 
   const handleWorkoutComplete = async (workoutData: any) => {
     try {
+      if (!session?.user?.id) throw new Error("No user session");
       const { error } = await supabase.from('workouts').insert({
-        user_id: session?.user?.id,
+        user_id: session.user.id,
         title: workoutData.title,
         type: workoutData.type,
         duration: workoutData.duration,
         calories_burned: workoutData.calories_burned,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
       });
-
       if (error) throw error;
-
       toast({
         title: "Workout Completed",
         description: "Your workout has been recorded successfully!",
       });
-
       setActiveWorkout(null);
       setActiveView('history');
-
-      // Reload workouts immediately after adding to refresh UI
-      if (fetchUserWorkouts) {
-        await fetchUserWorkouts();
-      }
-
+      await fetchUserWorkouts();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -120,27 +109,86 @@ const WorkoutTrackerPage = () => {
   };
 
   const handleStartWorkout = (workout: any, isAI = false) => {
+    // Defensive: Ensure workout has exercises array
+    if (isAI && (!workout.exercises || workout.exercises.length === 0)) {
+      // If AI workout missing exercises, set dummy simple exercises for demo
+      workout.exercises = [
+        {
+          name: "Jumping Jacks",
+          sets: 3,
+          reps: 15,
+          duration: 60,
+          restTime: 30,
+          instructions: [
+            "Start with feet together and arms at sides",
+            "Jump and spread feet, raise arms overhead",
+            "Jump back to start position",
+            "Repeat"
+          ]
+        }
+      ];
+    }
     setActiveWorkout({ ...workout, isAI });
     setActiveView('active-workout');
   };
 
-  // Dummy AI workouts for demonstration (would be dynamic in real app)
+  // Provide example AI workouts with exercises arrays to prevent empty exercises error
   useEffect(() => {
-    // Example AI workouts (could be loaded from AI chat or backend)
     setAIWorkouts([
       {
         id: 'ai-1',
         title: 'AI Generated Full Body Routine',
         type: 'Strength Training',
         duration: 30,
-        calories_burned: 250
+        calories_burned: 250,
+        exercises: [
+          {
+            name: "Push-ups",
+            sets: 3,
+            reps: 12,
+            duration: 60,
+            restTime: 30,
+            instructions: [
+              "Start in plank position with arms straight",
+              "Lower body until chest nearly touches floor",
+              "Push back up",
+              "Keep body straight"
+            ]
+          },
+          {
+            name: "Air Squats",
+            sets: 3,
+            reps: 15,
+            duration: 60,
+            restTime: 30,
+            instructions: [
+              "Stand feet shoulder-width apart",
+              "Push hips back and bend knees",
+              "Lower thighs parallel to floor",
+              "Push through heels to stand"
+            ]
+          }
+        ]
       },
       {
         id: 'ai-2',
         title: 'AI Cardio Blast',
         type: 'Cardio',
         duration: 20,
-        calories_burned: 220
+        calories_burned: 220,
+        exercises: [
+          {
+            name: "Mountain Climbers",
+            sets: 3,
+            reps: 20,
+            duration: 60,
+            restTime: 30,
+            instructions: [
+              "Start in plank position",
+              "Drive knees alternately to chest quickly"
+            ]
+          }
+        ]
       }
     ]);
   }, []);
@@ -170,28 +218,28 @@ const WorkoutTrackerPage = () => {
         {!activeWorkout ? (
           <>
             <div className="flex flex-wrap mb-8 space-x-2">
-              <Button 
+              <Button
                 variant={activeView === 'summary' ? 'default' : 'outline'}
                 onClick={() => setActiveView('summary')}
                 className="mb-2"
               >
                 <LineChart className="mr-2 h-4 w-4" /> Summary
               </Button>
-              <Button 
+              <Button
                 variant={activeView === 'log' ? 'default' : 'outline'}
                 onClick={() => setActiveView('log')}
                 className="mb-2"
               >
                 <PlusCircle className="mr-2 h-4 w-4" /> Log Workout
               </Button>
-              <Button 
+              <Button
                 variant={activeView === 'history' ? 'default' : 'outline'}
                 onClick={() => setActiveView('history')}
                 className="mb-2"
               >
                 <Calendar className="mr-2 h-4 w-4" /> Workout History
               </Button>
-              <Button 
+              <Button
                 variant={activeView === 'start-workout' ? 'default' : 'outline'}
                 onClick={() => setActiveView('start-workout')}
                 className="mb-2"
@@ -272,10 +320,10 @@ const WorkoutTrackerPage = () => {
           </>
         ) : (
           // Show active workout session
-          <WorkoutSession 
-            workout={activeWorkout} 
-            onComplete={handleWorkoutComplete} 
-            onCancel={() => setActiveWorkout(null)} 
+          <WorkoutSession
+            workout={activeWorkout}
+            onComplete={handleWorkoutComplete}
+            onCancel={() => setActiveWorkout(null)}
           />
         )}
       </div>
