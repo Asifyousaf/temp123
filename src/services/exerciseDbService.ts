@@ -140,3 +140,58 @@ export const getExerciseById = async (id: string): Promise<ExerciseDbExercise | 
     return null;
   }
 };
+
+/**
+ * Gets all exercises for a specific body part
+ * @param bodyPart Body part to filter by
+ * @returns List of exercises for that body part or null if request fails
+ */
+export const getExercisesByBodyPart = async (bodyPart: string): Promise<ExerciseDbExercise[] | null> => {
+  try {
+    return await fetchExerciseDb(`/exercises/bodyPart/${encodeURIComponent(bodyPart.toLowerCase())}`);
+  } catch (error) {
+    console.error("Failed to get exercises by body part:", error);
+    return null;
+  }
+};
+
+/**
+ * Gets all exercises for a specific target muscle
+ * @param target Target muscle to filter by
+ * @returns List of exercises for that target muscle or null if request fails
+ */
+export const getExercisesByTarget = async (target: string): Promise<ExerciseDbExercise[] | null> => {
+  try {
+    return await fetchExerciseDb(`/exercises/target/${encodeURIComponent(target.toLowerCase())}`);
+  } catch (error) {
+    console.error("Failed to get exercises by target:", error);
+    return null;
+  }
+};
+
+/**
+ * Gets all available body parts from the API
+ * @returns List of body parts or null if the request fails
+ */
+export const getAllBodyParts = async (): Promise<string[] | null> => {
+  try {
+    return await fetchExerciseDb(`/exercises/bodyPartList`);
+  } catch (error) {
+    console.error("Failed to get body parts list:", error);
+    return null;
+  }
+};
+
+/**
+ * Gets a random exercise from the API
+ * @returns Random exercise or null if the request fails
+ */
+export const getRandomExercise = async (): Promise<ExerciseDbExercise | null> => {
+  try {
+    const randomExercises = await fetchExerciseDb(`/exercises/random`);
+    return randomExercises && randomExercises.length > 0 ? randomExercises[0] : null;
+  } catch (error) {
+    console.error("Failed to get random exercise:", error);
+    return null;
+  }
+};

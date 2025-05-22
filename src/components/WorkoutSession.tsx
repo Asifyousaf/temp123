@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { XCircle, Check, ChevronRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -7,9 +8,10 @@ import WorkoutExerciseView from './workouts/WorkoutExerciseView';
 import WorkoutCompletionView from './workouts/WorkoutCompletionView';
 import WorkoutPackTabs from './workouts/WorkoutPackTabs';
 import WorkoutProgress, { WorkoutHeader } from './workouts/WorkoutProgress';
-import { WorkoutData } from '@/types/workout';
+import { Exercise, WorkoutData } from '@/types/workout';
 import { useWorkoutSession } from '@/hooks/useWorkoutSession';
-import { getBestExerciseImageUrlSync } from '@/utils/exerciseImageUtils';
+import { getBestExerciseImageUrlSync, getEnhancedExerciseData } from '@/utils/exerciseImageUtils';
+import { toast } from "@/components/ui/use-toast";
 
 interface WorkoutSessionProps {
   workout: WorkoutData;
@@ -18,6 +20,9 @@ interface WorkoutSessionProps {
 }
 
 const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) => {
+  const [enhancedExercises, setEnhancedExercises] = useState<{[key: string]: Exercise}>({});
+  const [loadingExercises, setLoadingExercises] = useState<boolean>(true);
+  
   const {
     currentExerciseIndex,
     currentSet,
@@ -47,6 +52,45 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
     completedExerciseDetails
   } = useWorkoutSession(workout, onComplete);
 
+  // Fetch enhanced exercise data from API when exercises change
+  useEffect(() => {
+    const fetchEnhancedExercises = async () => {
+      setLoadingExercises(true);
+      
+      try {
+        const enhancedData: {[key: string]: Exercise} = {};
+        
+        // Process exercises in batches to avoid overwhelming the API
+        for (const exercise of exercises) {
+          if (!exercise) continue;
+          
+          // Skip if we already have data for this exercise
+          if (enhancedExercises[exercise.name]) continue;
+          
+          // Get enhanced data with GIFs, images, and instructions
+          const enhancedExercise = await getEnhancedExerciseData(exercise);
+          enhancedData[exercise.name] = enhancedExercise;
+        }
+        
+        setEnhancedExercises(prev => ({...prev, ...enhancedData}));
+        console.log("Enhanced exercises loaded:", Object.keys(enhancedData).length);
+      } catch (error) {
+        console.error("Error enhancing exercise data:", error);
+        toast({
+          title: "Couldn't load all exercise animations",
+          description: "Some exercises might not have animations available.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoadingExercises(false);
+      }
+    };
+    
+    if (exercises && exercises.length > 0) {
+      fetchEnhancedExercises();
+    }
+  }, [exercises, activePackItemIndex]);
+
   // Handle invalid workout data
   if (!workout || !activeWorkout) {
     return (
@@ -63,13 +107,14 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
     );
   }
 
-  // Ensure current exercise has a valid image URL
-  const getExerciseImageUrl = (exercise) => {
+  // Get the enhanced exercise data if available
+  const getEnhancedExercise = (exercise: Exercise | null): Exercise | null => {
     if (!exercise) return null;
-    
-    // Use the utility to get the best image URL
-    return getBestExerciseImageUrlSync(exercise);
+    return enhancedExercises[exercise.name] || exercise;
   };
+
+  // Get current exercise with enhancements
+  const enhancedCurrentExercise = getEnhancedExercise(currentExercise);
 
   return (
     <Card className="w-full border-2 border-purple-100 shadow-lg">
@@ -108,28 +153,26 @@ const WorkoutSession = ({ workout, onComplete, onCancel }: WorkoutSessionProps) 
           exercises={exercises}
         />
 
-        {currentExerciseIndex < exercises.length && currentExercise ? (
+        {currentExerciseIndex < exercises.length && enhancedCurrentExercise ? (
           <div className="space-y-8">
             <WorkoutExerciseView
-              exercise={{
-                ...currentExercise,
-                gifUrl: getExerciseImageUrl(currentExercise)
-              }}
+              exercise={enhancedCurrentExercise}
               currentSet={currentSet}
-              totalSets={currentExercise.sets || 3}
+              totalSets={enhancedCurrentExercise.sets || 3}
               remainingSeconds={timeLeft}
               isRest={isResting}
               isPaused={isPaused}
+              isLoading={loadingExercises && currentExerciseIndex === 0}
               onTogglePause={handlePlayPause}
               onComplete={isResting ? 
                 () => {
                   setIsResting(false);
-                  setTimeLeft(currentExercise.duration || 60);
+                  setTimeLeft(enhancedCurrentExercise.duration || 60);
                 } : 
                 () => {
-                  if (currentSet < (currentExercise.sets || 3)) {
+                  if (currentSet < (enhancedCurrentExercise.sets || 3)) {
                     setIsResting(true);
-                    setTimeLeft(60); // Default rest time
+                    setTimeLeft(enhancedCurrentExercise.restTime || 60); // Rest time
                     setCurrentSet(prev => prev + 1);
                   } else {
                     handleCompleteExercise();

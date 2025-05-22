@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, Video, Image } from 'lucide-react';
+import { Play, Pause, Video, Image, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import ExerciseDemonstration from './ExerciseDemonstration';
 import ExerciseInstructions from './ExerciseInstructions';
 import TimerDisplay from './TimerDisplay';
 import { getBestExerciseImageUrlSync, getExerciseYoutubeId, searchExerciseImage } from '@/utils/exerciseImageUtils';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
+import { Exercise } from '@/types/exercise';
 
 interface WorkoutExerciseViewProps {
   exercise: any;
@@ -16,6 +17,7 @@ interface WorkoutExerciseViewProps {
   remainingSeconds: number;
   isRest: boolean;
   isPaused: boolean;
+  isLoading?: boolean;
   onTogglePause: () => void;
   onComplete: () => void;
 }
@@ -30,6 +32,7 @@ const WorkoutExerciseView: React.FC<WorkoutExerciseViewProps> = ({
   remainingSeconds,
   isRest,
   isPaused,
+  isLoading = false,
   onTogglePause,
   onComplete
 }) => {
@@ -81,7 +84,7 @@ const WorkoutExerciseView: React.FC<WorkoutExerciseViewProps> = ({
   
   // Generate exercise instructions if they don't exist
   const getInstructions = () => {
-    if (exercise.instructions && Array.isArray(exercise.instructions)) {
+    if (exercise.instructions && Array.isArray(exercise.instructions) && exercise.instructions.length > 0) {
       return exercise.instructions;
     }
     
@@ -119,6 +122,18 @@ const WorkoutExerciseView: React.FC<WorkoutExerciseViewProps> = ({
     console.log('Image error occurred for:', exercise.name);
     setImageLoadFailed(true);
   };
+
+  // Show loading state while exercise data is being fetched
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100 p-8">
+        <div className="flex flex-col items-center justify-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-4" />
+          <p className="text-gray-600">Loading exercise data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
@@ -171,6 +186,29 @@ const WorkoutExerciseView: React.FC<WorkoutExerciseViewProps> = ({
           <div className="bg-gray-50 p-5 rounded-lg flex flex-col justify-between h-full">
             <div>
               <h3 className="text-xl font-bold mb-1">{isRest ? 'Rest Time' : exercise.name}</h3>
+              
+              {!isRest && (
+                <div className="mb-2">
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {exercise.bodyPart && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded">
+                        {exercise.bodyPart}
+                      </span>
+                    )}
+                    {exercise.target && (
+                      <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded">
+                        {exercise.target}
+                      </span>
+                    )}
+                    {exercise.equipment && (
+                      <span className="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded">
+                        {exercise.equipment}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <p className="text-gray-600 mb-4">
                 {isRest ? 
                   'Take a short break before the next set' : 
