@@ -1,13 +1,8 @@
 
 import { toast } from "@/components/ui/use-toast";
 
-// ExerciseDB API configuration - Using RapidAPI
-const EXERCISEDB_RAPIDAPI_URL = "https://exercisedb.p.rapidapi.com";
-// For free version fallback
+// ExerciseDB API configuration
 const EXERCISEDB_API_URL = "https://exercisedb-api.vercel.app";
-
-
-const RAPIDAPI_KEY = "3258340256msh72616f62a5d431dp1207f6jsnc6934870cc0b"; // Replace with your key
 
 // Custom types for ExerciseDB API responses
 export interface ExerciseDbExercise {
@@ -34,33 +29,7 @@ export const fetchExerciseDb = async (
   try {
     console.log("Fetching from ExerciseDB API:", endpoint);
     
-    // Try RapidAPI first if key is provided
-    if (RAPIDAPI_KEY && RAPIDAPI_KEY !== "3258340256msh72616f62a5d431dp1207f6jsnc6934870cc0b") {
-      try {
-        const response = await fetch(`${EXERCISEDB_RAPIDAPI_URL}${endpoint}`, {
-          method: 'GET',
-          headers: {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          cache: 'force-cache' // Add caching to improve performance and reduce API calls
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          return convertHttpToHttps(data);
-        }
-        
-        console.log("RapidAPI request failed, falling back to free API");
-      } catch (error) {
-        console.error("RapidAPI request failed:", error);
-        console.log("Falling back to free API");
-      }
-    }
-    
-    // Fallback to free API version
+    // Build the URL with query parameters
     const queryString = new URLSearchParams(params).toString();
     const url = `${EXERCISEDB_API_URL}${endpoint}${queryString ? `?${queryString}` : ''}`;
     
@@ -157,8 +126,6 @@ export const getBestMatchingExercise = async (exerciseName: string): Promise<Exe
     return null;
   }
 };
-
-// Additional helper functions can be implemented as needed
 
 /**
  * Gets exercise by its ID
