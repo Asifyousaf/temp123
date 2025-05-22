@@ -67,7 +67,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             Workout Tracker
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation - Simplified */}
           <nav className="hidden md:flex items-center space-x-8">
             <Link to="/" className="text-gray-700 hover:text-purple-600">Home</Link>
             <Link to="/workouts" className="text-gray-700 hover:text-purple-600">Workouts</Link>
@@ -101,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </button>
         </div>
 
-        {/* Mobile Navigation */}
+        {/* Mobile Navigation - Simplified */}
         {isMenuOpen && (
           <div className="md:hidden bg-white">
             <div className="container mx-auto px-4 py-4 flex flex-col space-y-4">
@@ -153,7 +153,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {children}
       </main>
 
-      {/* Footer */}
+      {/* Footer - Simplified */}
       <footer className="bg-gray-800 text-white py-8">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between">

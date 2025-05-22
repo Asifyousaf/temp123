@@ -1,9 +1,20 @@
 
-import { WorkoutData, WorkoutDataExtended } from '@/types/workout';
+import { WorkoutData, WorkoutDataExtended, Exercise, WorkoutExercisesData } from '@/types/workout';
 
 // Helper function to format a workout from database format to app format
 export const formatWorkout = (workout: WorkoutDataExtended): WorkoutData => {
   // Normalize the workout data to ensure consistent structure
+  let formattedExercises: Exercise[] | WorkoutExercisesData = [];
+  
+  // Properly handle the exercises conversion based on type
+  if (workout.exercises) {
+    if (Array.isArray(workout.exercises)) {
+      formattedExercises = workout.exercises as Exercise[];
+    } else if (typeof workout.exercises === 'object') {
+      formattedExercises = workout.exercises as WorkoutExercisesData;
+    }
+  }
+
   return {
     id: workout.id,
     title: workout.title || '',
@@ -13,7 +24,7 @@ export const formatWorkout = (workout: WorkoutDataExtended): WorkoutData => {
     duration: workout.duration || 30,
     calories_burned: workout.calories_burned || 300,
     caloriesBurn: workout.calories_burned || workout.caloriesBurn || 300,
-    exercises: workout.exercises || [],
+    exercises: formattedExercises,
     image: workout.image || '',
     user_id: workout.user_id || '',
     isPack: workout.isPack || false

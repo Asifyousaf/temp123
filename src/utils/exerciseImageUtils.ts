@@ -38,3 +38,23 @@ export const getBestExerciseImageUrlSync = (exercise: any): string => {
 export const getExerciseYoutubeId = (exercise: any): string | undefined => {
   return exercise.youtubeId || undefined;
 };
+
+// Added to fix the missing function error
+export const searchExerciseImage = async (query: string): Promise<string> => {
+  // This is a simplified implementation that returns a fallback image based on the query
+  const searchTerm = query.toLowerCase();
+  
+  if (searchTerm.includes('push')) return '/fallbacks/push-ups.gif';
+  if (searchTerm.includes('squat')) return '/fallbacks/squats.gif';
+  if (searchTerm.includes('plank')) return '/fallbacks/plank.gif';
+  if (searchTerm.includes('burpee')) return '/fallbacks/burpees.gif';
+  if (searchTerm.includes('run')) return '/fallbacks/running.gif';
+  if (searchTerm.includes('pull')) return '/fallbacks/pull-ups.gif';
+  if (searchTerm.includes('curl')) return '/fallbacks/bicep-curl.gif';
+  if (searchTerm.includes('deadlift')) return '/fallbacks/deadlift.gif';
+  if (searchTerm.includes('jack')) return '/fallbacks/jumping-jacks.gif';
+  if (searchTerm.includes('mountain')) return '/fallbacks/mountain-climbers.gif';
+  if (searchTerm.includes('russian')) return '/fallbacks/russian-twists.gif';
+  
+  return '/fallbacks/default.gif';
+};
