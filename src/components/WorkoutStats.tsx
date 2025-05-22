@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Activity, Calendar, Flame, Clock, Dumbbell } from 'lucide-react';
 import { format, subDays, parseISO } from 'date-fns';
@@ -34,10 +35,18 @@ const WorkoutStats = ({ userId }: WorkoutStatsProps) => {
     recentWorkouts: []
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!userId) {
+        setIsLoading(false);
+        return;
+      }
+      
       setIsLoading(true);
+      setError(null);
+      
       try {
         // Get all workouts for this user
         const { data, error } = await supabase
@@ -46,21 +55,28 @@ const WorkoutStats = ({ userId }: WorkoutStatsProps) => {
           .eq('user_id', userId)
           .order('date', { ascending: false });
           
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase error:", error);
+          throw error;
+        }
         
         if (!data || data.length === 0) {
           setIsLoading(false);
           return;
         }
         
+        console.log("Fetched workout data:", data);
+        
         // Calculate total stats
         const totalWorkouts = data.length;
-        const totalDuration = data.reduce((sum, workout) => sum + workout.duration, 0);
-        const totalCalories = data.reduce((sum, workout) => sum + workout.calories_burned, 0);
+        const totalDuration = data.reduce((sum, workout) => sum + (workout.duration || 0), 0);
+        const totalCalories = data.reduce((sum, workout) => sum + (workout.calories_burned || 0), 0);
         
         // Count workouts by type
         const workoutsByType = data.reduce((acc, workout) => {
-          acc[workout.type] = (acc[workout.type] || 0) + 1;
+          if (workout.type) {
+            acc[workout.type] = (acc[workout.type] || 0) + 1;
+          }
           return acc;
         }, {} as { [key: string]: number });
         
@@ -79,9 +95,9 @@ const WorkoutStats = ({ userId }: WorkoutStatsProps) => {
         // Aggregate workout data by date
         data.forEach(workout => {
           const workoutDate = workout.date;
-          if (recentWorkoutMap[workoutDate]) {
-            recentWorkoutMap[workoutDate].duration += workout.duration;
-            recentWorkoutMap[workoutDate].calories += workout.calories_burned;
+          if (workoutDate && recentWorkoutMap[workoutDate]) {
+            recentWorkoutMap[workoutDate].duration += (workout.duration || 0);
+            recentWorkoutMap[workoutDate].calories += (workout.calories_burned || 0);
           }
         });
         
@@ -97,6 +113,7 @@ const WorkoutStats = ({ userId }: WorkoutStatsProps) => {
         
       } catch (error: any) {
         console.error('Error fetching workout stats:', error);
+        setError(error.message || "Failed to load workout statistics");
         toast({
           title: "Error",
           description: "Failed to load workout statistics",
@@ -120,6 +137,26 @@ const WorkoutStats = ({ userId }: WorkoutStatsProps) => {
       <div className="flex justify-center py-8">
         <div className="animate-pulse text-purple-600">Loading stats...</div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Activity className="mr-2 h-5 w-5 text-purple-600" />
+            Workout Statistics
+          </CardTitle>
+          <CardDescription>Error loading data</CardDescription>
+        </CardHeader>
+        <CardContent className="text-center py-8">
+          <p className="text-red-500 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            Try Again
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 

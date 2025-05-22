@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Settings, Activity, Award, Heart, MessageSquare, Calendar, ChevronRight, Edit, Save, X, Ruler, Weight } from 'lucide-react';
@@ -26,10 +27,22 @@ interface ProfileData {
   updated_at: string | null;
 }
 
+// Interface for workout data
+interface WorkoutData {
+  id: string;
+  title: string;
+  duration: number;
+  calories_burned: number;
+  date: string;
+  type: string;
+}
+
 const ProfilePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [workoutsLoading, setWorkoutsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
+  const [workouts, setWorkouts] = useState<WorkoutData[]>([]);
   const [profile, setProfile] = useState<ProfileData>({
     id: '',
     full_name: '',
@@ -72,6 +85,7 @@ const ProfilePage = () => {
       }
       
       await fetchProfile(session.user.id);
+      await fetchWorkouts(session.user.id);
       setLoading(false);
     };
     
@@ -126,6 +140,29 @@ const ProfilePage = () => {
         variant: "destructive"
       });
       console.error('Error fetching profile:', error);
+    }
+  };
+
+  const fetchWorkouts = async (userId: string) => {
+    setWorkoutsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setWorkouts(data);
+      }
+    } catch (error: any) {
+      console.error('Error fetching workouts:', error);
+    } finally {
+      setWorkoutsLoading(false);
     }
   };
 
@@ -191,6 +228,9 @@ const ProfilePage = () => {
         title: "Success",
         description: "Profile updated successfully",
       });
+      
+      // Refresh profile data to ensure all components using profile data are updated
+      fetchProfile(session.user.id);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -201,6 +241,10 @@ const ProfilePage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartWorkout = () => {
+    navigate('/workouts');
   };
 
   if (loading) {
@@ -248,10 +292,14 @@ const ProfilePage = () => {
                   placeholder="Full Name"
                 />
               ) : (
-                <h1 className="text-2xl font-bold mb-1">{profile.full_name}</h1>
+                <h1 className="text-2xl font-bold mb-1">{profile.full_name || "Your Name"}</h1>
               )}
               
-              <p className="text-gray-600 mb-4">Fitness enthusiast • Joined March 2023</p>
+              <p className="text-gray-600 mb-4">
+                {profile.created_at 
+                  ? `NutriBuddy member since ${new Date(profile.created_at).toLocaleDateString('en-US', {month: 'long', year: 'numeric'})}`
+                  : "NutriBuddy enthusiast"}
+              </p>
               
               <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-4">
                 <span className="bg-purple-100 text-purple-800 text-xs px-3 py-1 rounded-full">
@@ -408,7 +456,7 @@ const ProfilePage = () => {
               <div className="text-purple-600 mb-1">
                 <Activity size={24} className="inline" />
               </div>
-              <p className="text-2xl font-bold">0</p>
+              <p className="text-2xl font-bold">{workouts.length}</p>
               <p className="text-xs text-gray-500">Workouts Completed</p>
             </div>
             
@@ -450,17 +498,54 @@ const ProfilePage = () => {
               <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
               
               <div className="space-y-4">
-                {/* Empty state */}
-                <div className="py-8 text-center bg-gray-50 rounded-lg border">
-                  <Activity size={32} className="text-gray-400 mx-auto mb-3" />
-                  <h3 className="text-lg font-medium text-gray-600">No Activity Yet</h3>
-                  <p className="text-gray-500 text-sm mt-1">Complete workouts to track your progress</p>
-                </div>
+                {workoutsLoading ? (
+                  <div className="py-8 text-center">
+                    <div className="animate-pulse text-purple-600">Loading...</div>
+                  </div>
+                ) : workouts.length > 0 ? (
+                  // Display actual workouts
+                  <div className="space-y-4">
+                    {workouts.slice(0, 5).map(workout => (
+                      <div key={workout.id} className="flex items-center justify-between p-4 bg-white rounded-lg border">
+                        <div>
+                          <h3 className="font-medium">{workout.title}</h3>
+                          <p className="text-sm text-gray-500">
+                            {new Date(workout.date).toLocaleDateString()} • {workout.duration} min • {workout.calories_burned} cal
+                          </p>
+                        </div>
+                        <div className="bg-purple-100 text-purple-800 text-xs px-3 py-1 rounded-full">
+                          {workout.type}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {workouts.length > 5 && (
+                      <button 
+                        className="w-full py-3 text-center text-purple-600 hover:text-purple-800 text-sm font-medium"
+                        onClick={() => navigate('/workout-tracker')}
+                      >
+                        View All Workouts
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  // Empty state
+                  <div className="py-8 text-center bg-gray-50 rounded-lg border">
+                    <Activity size={32} className="text-gray-400 mx-auto mb-3" />
+                    <h3 className="text-lg font-medium text-gray-600">No Activity Yet</h3>
+                    <p className="text-gray-500 text-sm mt-1">Complete workouts to track your progress</p>
+                  </div>
+                )}
                 
-                {/* View All Button */}
-                <button className="w-full py-3 text-center text-purple-600 hover:text-purple-800 text-sm font-medium">
-                  Start Your First Workout
-                </button>
+                {/* Start Workout Button - Always visible */}
+                {workouts.length === 0 && (
+                  <Button 
+                    className="w-full py-3 text-center"
+                    onClick={handleStartWorkout}
+                  >
+                    Start Your First Workout
+                  </Button>
+                )}
               </div>
             </TabsContent>
             
@@ -474,7 +559,12 @@ const ProfilePage = () => {
                 </div>
                 <h3 className="text-lg font-medium mb-2">No Progress Data Yet</h3>
                 <p className="text-gray-500 mb-4">Complete workouts to see your progress charts</p>
-                <Button className="bg-purple-600">Start Tracking</Button>
+                <Button 
+                  className="bg-purple-600"
+                  onClick={handleStartWorkout}
+                >
+                  Start Tracking
+                </Button>
               </div>
               
               {/* Progress Stats */}
@@ -485,10 +575,29 @@ const ProfilePage = () => {
                     <div>
                       <div className="flex justify-between text-sm mb-1">
                         <span>Weekly Workouts</span>
-                        <span className="font-medium">0/4 completed</span>
+                        <span className="font-medium">{workouts.filter(w => {
+                          const workoutDate = new Date(w.date);
+                          const now = new Date();
+                          const weekAgo = new Date();
+                          weekAgo.setDate(now.getDate() - 7);
+                          return workoutDate >= weekAgo && workoutDate <= now;
+                        }).length}/4 completed</span>
                       </div>
                       <div className="w-full bg-gray-200 h-2 rounded-full">
-                        <div className="bg-purple-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+                        <div 
+                          className="bg-purple-600 h-2 rounded-full" 
+                          style={{ 
+                            width: `${Math.min(
+                              workouts.filter(w => {
+                                const workoutDate = new Date(w.date);
+                                const now = new Date();
+                                const weekAgo = new Date();
+                                weekAgo.setDate(now.getDate() - 7);
+                                return workoutDate >= weekAgo && workoutDate <= now;
+                              }).length / 4 * 100, 100
+                            )}%` 
+                          }}
+                        ></div>
                       </div>
                     </div>
                     <div>
@@ -552,7 +661,10 @@ const ProfilePage = () => {
                   <p className="text-gray-500 text-sm mt-1">Enroll in a plan to start your fitness journey</p>
                 </div>
                 
-                <Button className="w-full bg-purple-600">
+                <Button 
+                  className="w-full bg-purple-600"
+                  onClick={() => navigate('/workouts')}
+                >
                   Browse Available Plans
                 </Button>
               </div>

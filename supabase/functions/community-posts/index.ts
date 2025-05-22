@@ -1,154 +1,107 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.33.1";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: corsHeaders,
+    });
   }
-  
+
   try {
+    // Create Supabase client with Deno.env
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
     );
-    
-    // Get the session to identify the user
-    const {
-      data: { session },
-    } = await supabaseClient.auth.getSession();
-    
-    if (!session) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
+
+    console.log("Community posts function invoked");
     
     const { action, post } = await req.json();
-    
-    if (action === 'create') {
-      // Create a new post
+    console.log(`Action requested: ${action}`);
+
+    // Handle different actions
+    if (action === "list") {
+      console.log("Listing posts");
+      // Try to fetch posts directly from the database
+      try {
+        const { data, error } = await supabaseClient
+          .from('posts')
+          .select('*, profiles:user_id(full_name, avatar_url, username)')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        return new Response(JSON.stringify(data || []), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      } catch (error) {
+        console.error(`Error listing posts: ${JSON.stringify(error, null, 2)}`);
+        throw error;
+      }
+    } else if (action === "create") {
+      console.log("Creating post", post);
+      
+      // Get authenticated user
+      const { data: { session }, error: authError } = await supabaseClient.auth.getSession();
+      
+      if (authError || !session) {
+        throw new Error("Authentication required to create posts");
+      }
+      
+      // Add user_id to post data
+      const postData = {
+        ...post,
+        user_id: session.user.id
+      };
+      
+      // Insert the post
       const { data, error } = await supabaseClient
-        .from('community_posts')
-        .insert({
-          user_id: session.user.id,
-          content: post.content,
-          title: post.title,
-          category: post.category,
-          image_url: post.image_url || null,
-        })
-        .select('*, profiles(full_name, avatar_url)');
-      
-      if (error) throw error;
-      
-      return new Response(
-        JSON.stringify(data),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else if (action === 'list') {
-      // List posts with user information
-      const { data, error } = await supabaseClient
-        .from('community_posts')
-        .select('*, profiles(full_name, avatar_url)')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      return new Response(
-        JSON.stringify(data),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else if (action === 'like') {
-      // Like/unlike a post
-      const postId = post.id;
-      
-      // Check if user has already liked the post
-      const { data: existingLike, error: likeCheckError } = await supabaseClient
-        .from('post_likes')
+        .from('posts')
+        .insert(postData)
         .select('*')
-        .eq('post_id', postId)
-        .eq('user_id', session.user.id)
-        .maybeSingle();
+        .single();
+        
+      if (error) throw error;
       
-      if (likeCheckError) throw likeCheckError;
-      
-      if (existingLike) {
-        // Remove the like
-        const { error: unlikeError } = await supabaseClient
-          .from('post_likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', session.user.id);
-        
-        if (unlikeError) throw unlikeError;
-        
-        // Decrement the likes count
-        const { data: updatedPost, error: updateError } = await supabaseClient
-          .from('community_posts')
-          .update({ likes_count: post.likes_count - 1 })
-          .eq('id', postId)
-          .select();
-        
-        if (updateError) throw updateError;
-        
-        return new Response(
-          JSON.stringify({ action: 'unliked', post: updatedPost[0] }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else {
-        // Add the like
-        const { error: likeError } = await supabaseClient
-          .from('post_likes')
-          .insert({ post_id: postId, user_id: session.user.id });
-        
-        if (likeError) throw likeError;
-        
-        // Increment the likes count
-        const { data: updatedPost, error: updateError } = await supabaseClient
-          .from('community_posts')
-          .update({ likes_count: post.likes_count + 1 })
-          .eq('id', postId)
-          .select();
-        
-        if (updateError) throw updateError;
-        
-        return new Response(
-          JSON.stringify({ action: 'liked', post: updatedPost[0] }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    } else if (action === "like") {
+      // Handle like action
+      if (!post || !post.id) {
+        throw new Error("Post ID required to like a post");
       }
+
+      // Update the post likes count
+      const { data, error } = await supabaseClient
+        .rpc('increment_likes', { post_id: post.id });
+
+      if (error) {
+        throw error;
+      }
+
+      return new Response(JSON.stringify({ success: true, message: "Like updated" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    } else {
+      throw new Error(`Unsupported action: ${action}`);
     }
-    
-    return new Response(
-      JSON.stringify({ error: 'Invalid action' }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-    
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    console.error(`Function error: ${error}`);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
+    });
   }
 });

@@ -27,8 +27,8 @@ const AuthPage = () => {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
         navigate('/');
       }
     };
@@ -75,7 +75,27 @@ const AuthPage = () => {
         }
       });
       
-      if (authError) throw authError;
+      if (authError) {
+        if (authError.message.includes("User already registered")) {
+          // If user exists, try to log in automatically
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          
+          if (signInError) throw signInError;
+          
+          toast({
+            title: "Success",
+            description: "Logged in successfully with existing account."
+          });
+          
+          navigate('/');
+          return;
+        } else {
+          throw authError;
+        }
+      }
       
       if (authData.user) {
         // Create profile with additional information
@@ -92,15 +112,23 @@ const AuthPage = () => {
           });
           
         if (profileError) throw profileError;
+        
+        // If auto-confirmation is enabled or session is available, redirect to home
+        if (authData.session) {
+          toast({
+            title: "Success",
+            description: "Account created successfully! You are now logged in."
+          });
+          navigate('/');
+        } else {
+          toast({
+            title: "Success",
+            description: "Account created successfully! Check your email for the confirmation link."
+          });
+          setActiveTab('login');
+          setSignupStep(1);
+        }
       }
-      
-      toast({
-        title: "Success",
-        description: "Account created successfully! Check your email for the confirmation link."
-      });
-      
-      setActiveTab('login');
-      setSignupStep(1);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -139,7 +167,7 @@ const AuthPage = () => {
         description: "Logged in successfully"
       });
       
-      navigate('/workout-tracker');
+      navigate('/');
     } catch (error: any) {
       toast({
         title: "Error",

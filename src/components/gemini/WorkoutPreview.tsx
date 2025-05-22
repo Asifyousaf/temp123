@@ -1,77 +1,158 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { Dumbbell, Layers, Plus, ChevronDown, ChevronUp, Clock, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dumbbell, Clock } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { getBestExerciseImageUrlSync } from '@/utils/exerciseImageUtils';
 
 interface WorkoutPreviewProps {
   workoutData: any[];
   onAddWorkout?: (workout: any) => void;
+  onAddWorkoutPack?: (workouts: any[]) => void;
 }
 
-const WorkoutPreview: React.FC<WorkoutPreviewProps> = ({ workoutData, onAddWorkout }) => {
+const WorkoutPreview: React.FC<WorkoutPreviewProps> = ({ workoutData, onAddWorkout, onAddWorkoutPack }) => {
+  const [open, setOpen] = useState(false);
+  
   if (!workoutData || workoutData.length === 0) return null;
   
-  const handleAddWorkout = (workout: any) => {
-    if (onAddWorkout) {
-      onAddWorkout(workout);
-    }
-  };
+  // Reliable workout animation URLs
+  const workoutAnimations = [
+    "https://media1.tenor.com/m/ATlOy9HYgLMAAAAC/push-ups.gif",
+    "https://media1.tenor.com/m/2nEQqqxUb5wAAAAC/jumping-jacks-workout.gif",
+    "https://media1.tenor.com/m/swrtW4dXlYAAAAAC/lunge-exercise.gif",
+    "https://media1.tenor.com/m/U7OXlvYxaTIAAAAC/squats.gif",
+    "https://media1.tenor.com/m/ZC-WH4unx7YAAAAd/burpees-exercise.gif",
+    "https://media1.tenor.com/m/gI-8qCUMSeMAAAAd/pushup.gif",
+    "https://media1.tenor.com/m/0SO6-iX_RRYAAAAd/shoulder.gif",
+    "https://media1.tenor.com/m/Jet8SkE99wYAAAAd/tricep.gif",
+    "https://media1.tenor.com/m/K6_2KpT9MhQAAAAC/plank-exercise.gif",
+    "https://media1.tenor.com/m/OF44QmJrRwkAAAAd/sit-ups.gif"
+  ];
+  
+  // Default workout image with reliable URL
+  const defaultWorkoutImage = "https://media1.tenor.com/m/ATlOy9HYgLMAAAAC/push-ups.gif";
+  
+  // Ensure workout data has all necessary fields and reliable animations
+  const enhancedWorkoutData = workoutData.map((workout, index) => {
+    // Process exercises to add reliable animations
+    const enhancedExercises = workout.exercises?.map((exercise, i) => {
+      return {
+        ...exercise,
+        gifUrl: workoutAnimations[i % workoutAnimations.length]
+      };
+    }) || [];
+    
+    return {
+      ...workout,
+      title: workout.title || workout.name || "Untitled Exercise",
+      type: workout.type || "General",
+      duration: workout.duration || 30,
+      calories_burned: workout.calories_burned || 300,
+      exercises: enhancedExercises,
+      image: workoutAnimations[index % workoutAnimations.length] || defaultWorkoutImage
+    };
+  });
+  
+  const totalDuration = enhancedWorkoutData.reduce((total, workout) => total + (workout.duration || 30), 0);
+  const totalCalories = enhancedWorkoutData.reduce((total, workout) => total + (workout.calories_burned || 300), 0);
   
   return (
-    <div className="mt-4">
-      <Card className="border border-purple-200">
-        <CardHeader className="bg-purple-50 pb-2">
-          <CardTitle className="text-sm font-medium text-purple-800 flex items-center">
-            <Dumbbell className="w-4 h-4 mr-2" /> 
-            Suggested Workout
+    <Card className="border-2 border-purple-100">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-lg flex items-center">
+            <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
+            AI Workout {enhancedWorkoutData.length > 1 ? 'Pack' : 'Plan'}
           </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 pb-2">
-          <div className="space-y-3 max-h-48 overflow-y-auto">
-            {workoutData.slice(0, 3).map((exercise, index) => (
-              <div key={index} className="flex gap-3 items-center">
-                {exercise.gifUrl && (
-                  <div className="w-16 h-16 flex-shrink-0">
-                    <img 
-                      src={exercise.gifUrl} 
-                      alt={exercise.name}
-                      className="w-full h-full object-cover rounded" 
-                    />
-                  </div>
-                )}
-                <div className="flex-1">
-                  <h4 className="font-medium text-sm">{exercise.name}</h4>
-                  <div className="flex flex-wrap gap-1 mt-1 text-xs text-gray-600">
-                    <span className="bg-purple-100 px-1.5 py-0.5 rounded-full">
-                      {exercise.target}
-                    </span>
-                    <span className="bg-blue-100 px-1.5 py-0.5 rounded-full">
-                      {exercise.equipment}
-                    </span>
-                  </div>
+          {enhancedWorkoutData.length > 1 && (
+            <Badge variant="outline" className="bg-purple-50 text-purple-700">
+              {enhancedWorkoutData.length} workouts
+            </Badge>
+          )}
+        </div>
+        <CardDescription>
+          Personalized workout {enhancedWorkoutData.length > 1 ? 'pack' : 'plan'} generated by AI
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent className="text-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center">
+            <Clock className="h-4 w-4 text-purple-600 mr-1" />
+            <span>Approx. {totalDuration} mins</span>
+          </div>
+          <div className="flex items-center">
+            <Flame className="h-4 w-4 text-orange-600 mr-1" />
+            <span>~{totalCalories} calories</span>
+          </div>
+        </div>
+        
+        <Collapsible open={open} onOpenChange={setOpen} className="bg-purple-50 rounded-md">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="flex justify-between w-full text-purple-700 p-3 hover:bg-purple-100">
+              <span className="font-medium">
+                {open ? 'Hide details' : 'View workout details'}
+              </span>
+              {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="p-3 pt-0">
+            {enhancedWorkoutData.map((workout, index) => (
+              <div key={index} className="border-b border-purple-100 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0">
+                <div className="font-medium mb-1 text-purple-800 text-base">{workout.title || `Workout ${index + 1}`}</div>
+                <div className="text-xs text-gray-600 mb-2">
+                  {workout.type || 'General'} • ~{workout.duration || 30} mins • ~{workout.calories_burned || 300} calories
+                </div>
+                <div className="text-xs">
+                  {Array.isArray(workout.exercises) ? (
+                    <ul className="list-disc list-inside">
+                      {workout.exercises.slice(0, 3).map((exercise: any, i: number) => (
+                        <li key={i} className="text-gray-600 mb-1">
+                          <span className="font-medium text-gray-700">{exercise.name || exercise.title || `Exercise ${i + 1}`}</span>
+                          {exercise.sets && exercise.reps && (
+                            <span className="text-gray-500"> • {exercise.sets} sets × {exercise.reps} reps</span>
+                          )}
+                        </li>
+                      ))}
+                      {workout.exercises.length > 3 && (
+                        <li className="text-gray-500">+{workout.exercises.length - 3} more exercises</li>
+                      )}
+                    </ul>
+                  ) : (
+                    <div className="text-gray-500 italic">Exercise details not available</div>
+                  )}
                 </div>
               </div>
             ))}
-            
-            {workoutData.length > 3 && (
-              <p className="text-xs text-gray-500 text-center italic">
-                +{workoutData.length - 3} more exercises available
-              </p>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter className="bg-gray-50 pt-2">
-          <Button 
-            onClick={() => handleAddWorkout(workoutData[0])}
+          </CollapsibleContent>
+        </Collapsible>
+      </CardContent>
+      
+      <CardFooter className="flex justify-between pt-0">
+        {onAddWorkoutPack && enhancedWorkoutData.length > 1 && (
+          <Button
+            onClick={() => onAddWorkoutPack(enhancedWorkoutData)}
             className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-            size="sm"
           >
-            Add to Your Workouts
+            <Layers className="h-4 w-4 mr-2" />
+            Add as Workout Pack
           </Button>
-        </CardFooter>
-      </Card>
-    </div>
+        )}
+        
+        {onAddWorkout && (enhancedWorkoutData.length === 1 || !onAddWorkoutPack) && (
+          <Button
+            onClick={() => onAddWorkout(enhancedWorkoutData[0])}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add to My Workouts
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
   );
 };
 

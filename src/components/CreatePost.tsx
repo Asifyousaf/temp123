@@ -1,137 +1,152 @@
 
-import { useState } from 'react';
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Image, Smile, MapPin, User, X } from 'lucide-react';
-import { toast } from "@/components/ui/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { ImageIcon, X } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
-interface CreatePostProps {
-  onPost: (content: string, image?: string) => void;
-  userAvatar?: string;
+// Update the prop interface to include onPost
+export interface CreatePostProps {
+  onPost?: (content: string, image?: string) => Promise<void>;
+  className?: string;
 }
 
-const CreatePost = ({ onPost, userAvatar }: CreatePostProps) => {
+const CreatePost: React.FC<CreatePostProps> = ({ onPost, className = '' }) => {
   const [content, setContent] = useState('');
-  const [isPosting, setIsPosting] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  
-  const handlePost = () => {
-    if (content.trim() === '') {
-      toast({
-        title: "Cannot post",
-        description: "Please write something before posting",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsPosting(true);
-    
-    // Simulate posting delay
-    setTimeout(() => {
-      onPost(content, selectedImage || undefined);
-      setContent('');
-      setSelectedImage(null);
-      setIsPosting(false);
-      
-      toast({
-        title: "Post created",
-        description: "Your post has been published to the community"
-      });
-    }, 1000);
-  };
-  
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [image, setImage] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (file) {
       const reader = new FileReader();
-      reader.onload = () => {
-        setSelectedImage(reader.result as string);
+      reader.onloadend = () => {
+        setImage(file.name);
+        setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
-  
-  return (
-    <Card className="mb-6">
-      <CardContent className="p-4">
-        <div className="flex items-start space-x-3">
-          <Avatar className="h-10 w-10">
-            {userAvatar ? (
-              <img src={userAvatar} alt="User avatar" />
-            ) : (
-              <AvatarFallback>
-                <User className="h-5 w-5" />
-              </AvatarFallback>
-            )}
-          </Avatar>
-          <div className="flex-1">
-            <Textarea
-              placeholder="What's on your fitness journey?"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full resize-none focus:outline-none focus:ring-1 focus:ring-purple-500 border-gray-200"
-              rows={3}
-            />
-            
-            {selectedImage && (
-              <div className="relative mt-2 rounded-md overflow-hidden border">
-                <img 
-                  src={selectedImage} 
-                  alt="Selected" 
-                  className="max-h-64 w-full object-contain"
-                />
-                <Button 
-                  variant="secondary" 
-                  size="icon" 
-                  className="absolute top-2 right-2 h-6 w-6 rounded-full bg-white text-gray-600 hover:bg-gray-200"
-                  onClick={() => setSelectedImage(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
+
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreview(null);
+  };
+
+  const handleSubmit = async () => {
+    if (!content.trim()) {
+      toast({
+        title: "Please write something.",
+        description: "Content cannot be empty.",
+      })
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get current user
+      const { data: { session } } = await supabase.auth.getSession();
       
-      <CardFooter className="p-3 pt-0 flex justify-between">
-        <div className="flex space-x-2">
-          <label className="cursor-pointer">
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              onChange={handleImageUpload}
-            />
-            <div className="flex items-center text-gray-500 hover:text-purple-500 hover:bg-purple-50 p-2 rounded-md">
-              <Image className="h-4 w-4 mr-1" />
-              <span className="text-sm">Photo</span>
-            </div>
+      if (!session?.user?.id) {
+        toast({
+          title: "Login Required",
+          description: "Please sign in to create posts",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Create post directly in database
+      const { data, error } = await supabase.from('posts').insert({
+        user_id: session.user.id,
+        content: content,
+        image_url: image || null,
+        likes: 0
+      }).select();
+      
+      if (error) throw error;
+      
+      // Call the onPost handler if provided
+      if (onPost) {
+        await onPost(content, image || undefined);
+      }
+      
+      // Reset the form
+      setContent('');
+      setImage(null);
+      setImagePreview(null);
+      
+      toast({
+        title: "Success!",
+        description: "Post created successfully.",
+      });
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      toast({
+        title: "Something went wrong.",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={cn("bg-white rounded-md shadow-sm p-4 space-y-4", className)}>
+      <Textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="What's on your mind?"
+        rows={3}
+        className="resize-none"
+      />
+
+      <div>
+        {imagePreview ? (
+          <div className="relative">
+            <img src={imagePreview} alt="Preview" className="rounded-md w-full h-auto max-h-48 object-cover" />
+            <Button
+              onClick={handleRemoveImage}
+              size="icon"
+              variant="ghost"
+              className="absolute top-2 right-2 hover:bg-gray-200"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <Input
+            id="image-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="hidden"
+          />
+        )}
+        {!imagePreview && (
+          <label htmlFor="image-upload" className="inline-flex items-center space-x-2 text-gray-500 hover:text-gray-700 cursor-pointer">
+            <ImageIcon className="h-5 w-5" />
+            <span>Add Image</span>
           </label>
-          
-          <div className="flex items-center text-gray-500 hover:text-purple-500 hover:bg-purple-50 p-2 rounded-md cursor-pointer">
-            <Smile className="h-4 w-4 mr-1" />
-            <span className="text-sm">Feeling</span>
-          </div>
-          
-          <div className="flex items-center text-gray-500 hover:text-purple-500 hover:bg-purple-50 p-2 rounded-md cursor-pointer">
-            <MapPin className="h-4 w-4 mr-1" />
-            <span className="text-sm">Location</span>
-          </div>
-        </div>
-        
-        <Button 
-          onClick={handlePost}
-          disabled={content.trim() === '' || isPosting}
-          className="bg-purple-600 hover:bg-purple-700"
+        )}
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSubmit}
+          disabled={loading}
         >
-          {isPosting ? 'Posting...' : 'Post'}
+          {loading ? "Posting..." : "Post"}
         </Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 };
 

@@ -19,26 +19,58 @@ You are a certified personal trainer and nutritionist who helps users with worko
 
 IMPORTANT FORMATTING RULES:
 1. Use plain text only. No markdown formatting.
-2. Do not use * for bullets or any other special characters like --, ==, or ** for formatting.
-3. Keep your responses conversational, clear, and concise.
+2. Keep your responses conversational, clear, and concise.
 
-When users ask about workouts:
-- Tell them "Here's a workout plan for you. You can add it to your workout page."
-- Keep exercise explanations simple and direct.
-- Structure all workouts with a clear title, target muscles, and instructions.
+WORKOUT INSTRUCTIONS:
+When users ask about workouts, structure your response like this:
+- Keep exercise explanations simple and direct
+- Include clear title, type, duration, and estimated calories
+- ALWAYS provide exercises with name, sets, reps, duration (in seconds), rest time, and detailed instructions
+- Format ALL workouts as structured JSON with these exact fields:
+{
+  "title": "Name of the workout",
+  "type": "STRENGTH/CARDIO/HIIT/etc",
+  "duration": 30, // in minutes
+  "exercises": [
+    {
+      "name": "Exercise name",
+      "sets": 3,
+      "reps": 12,
+      "duration": 60, // in seconds
+      "restTime": 30, // in seconds
+      "instructions": [
+        "Step 1: Detailed instruction",
+        "Step 2: Form guidance",
+        "Step 3: Tips for proper execution"
+      ]
+    }
+  ]
+}
 
-When users ask about meals or recipes:
-- Tell them "Here's a recipe you might enjoy. You can save it to your recipe collection."
-- Include basic nutritional information when available.
-- Structure all recipes with a clear title, ingredients, and instructions.
+RECIPE INSTRUCTIONS:
+When users ask about recipes or meal plans, structure your response like this:
+- Begin with "Here's a recipe you might enjoy. You can save it to your collection."
+- Include title, ingredients list, step-by-step instructions
+- Always include nutrition information (calories, protein, carbs, fat)
+- For recipes, use this format:
+{
+  "title": "Recipe Name",
+  "ingredients": [
+    "1 cup ingredient 1",
+    "2 tbsp ingredient 2"
+  ],
+  "instructions": [
+    "Step 1: Mix ingredients",
+    "Step 2: Cook for 10 minutes"
+  ],
+  "calories": 350,
+  "protein": 25,
+  "carbs": 30,
+  "fat": 15,
+  "tags": ["vegetarian", "high-protein"]
+}
 
-For all responses:
-- Be friendly and supportive but keep it brief.
-- Avoid overly technical language.
-- Use short paragraphs with clear spacing.
-- Never use bullet points with special characters.
-
-Your goal is to provide helpful fitness and nutrition guidance in a clean, easy-to-read format that works well in a chat interface.
+Remember to be encouraging and supportive in your responses. Start workout responses with "Here's a workout plan for you. You can add it to your workout page." and recipe responses with "Here's a recipe you might enjoy. You can save it to your collection."
 `;
 
 // Function to detect if user is asking for workout information
@@ -49,7 +81,7 @@ function isWorkoutQuery(query: string): boolean {
 
 // Function to detect if user is asking for nutrition information
 function isNutritionQuery(query: string): boolean {
-  const nutritionKeywords = ['food', 'meal', 'recipe', 'diet', 'nutrition', 'eat', 'calorie', 'protein', 'carb', 'vegan', 'vegetarian', 'gluten'];
+  const nutritionKeywords = ['food', 'meal', 'recipe', 'diet', 'nutrition', 'eat', 'calorie', 'protein', 'carb', 'vegan', 'vegetarian', 'gluten', 'breakfast', 'lunch', 'dinner', 'snack', 'cook', 'ingredient'];
   return nutritionKeywords.some(keyword => query.toLowerCase().includes(keyword));
 }
 
@@ -112,11 +144,20 @@ async function fetchRecipeData(query: string) {
       maxCalories = parseInt(calorieMatch[1]);
     }
     
+    // Check for specific food types or dishes
+    const cuisineTypes = ['italian', 'mexican', 'asian', 'indian', 'greek', 'mediterranean'];
+    let cuisineType = cuisineTypes.find(cuisine => query.toLowerCase().includes(cuisine.toLowerCase()));
+    
+    // Check for meal types
+    const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'dessert'];
+    let mealType = mealTypes.find(meal => query.toLowerCase().includes(meal.toLowerCase()));
+    
     // Build query parameters
     let params = new URLSearchParams({
       apiKey: spoonacularApiKey!,
-      number: '5', // Limit to 5 recipes
+      number: '3', // Limit to 3 recipes
       addRecipeInformation: 'true',
+      addRecipeNutrition: 'true',
       query: query.replace(/recipe|meal|food|eat/gi, '').trim() // Clean up the query a bit
     });
     
@@ -126,6 +167,14 @@ async function fetchRecipeData(query: string) {
     
     if (maxCalories) {
       params.append('maxCalories', maxCalories.toString());
+    }
+    
+    if (cuisineType) {
+      params.append('cuisine', cuisineType);
+    }
+    
+    if (mealType) {
+      params.append('type', mealType);
     }
     
     console.log(`Fetching recipe data with params: ${params.toString()}`);
@@ -143,6 +192,95 @@ async function fetchRecipeData(query: string) {
     console.error('Error fetching recipe data:', error);
     return null;
   }
+}
+
+// Extract structured recipe data from text
+function extractRecipeFromText(text: string) {
+  // Try to find structured recipe data
+  let recipe = {
+    title: "",
+    ingredients: [] as string[],
+    instructions: [] as string[],
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    tags: [] as string[]
+  };
+  
+  // Extract title
+  const titleMatch = text.match(/Recipe:\s*([^\n]+)/);
+  if (titleMatch) {
+    recipe.title = titleMatch[1].trim();
+  } else {
+    const titleAltMatch = text.match(/^(.*?)(?:Recipe|Ingredients)/i);
+    if (titleAltMatch) {
+      recipe.title = titleAltMatch[1].trim();
+    }
+  }
+  
+  // Extract ingredients
+  const ingredientsMatch = text.match(/Ingredients:([\s\S]*?)(?:Instructions|Directions|Method|Steps|Preparation|$)/i);
+  if (ingredientsMatch) {
+    const ingredientsText = ingredientsMatch[1].trim();
+    recipe.ingredients = ingredientsText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.match(/^[-•*]?\s*\d*\.?\s*\w+/));
+  }
+  
+  // Extract instructions
+  const instructionsMatch = text.match(/(?:Instructions|Directions|Method|Steps|Preparation):([\s\S]*?)(?:Preparation time|Cooking time|Total time|Nutritional|Nutrition|Dietary|Serving|$)/i);
+  if (instructionsMatch) {
+    const instructionsText = instructionsMatch[1].trim();
+    recipe.instructions = instructionsText
+      .split('\n')
+      .map(line => line.replace(/^\d+\.\s*/, '').trim())
+      .filter(line => line.length > 10); // Filter out short lines
+  }
+  
+  // Extract nutrition info
+  const caloriesMatch = text.match(/Calories:\s*(\d+)/i);
+  if (caloriesMatch) {
+    recipe.calories = parseInt(caloriesMatch[1]);
+  }
+  
+  const proteinMatch = text.match(/Protein:\s*(\d+)g/i);
+  if (proteinMatch) {
+    recipe.protein = parseInt(proteinMatch[1]);
+  }
+  
+  const carbsMatch = text.match(/Carbs:\s*(\d+)g/i);
+  if (carbsMatch) {
+    recipe.carbs = parseInt(carbsMatch[1]);
+  }
+  
+  const fatMatch = text.match(/Fat:\s*(\d+)g/i);
+  if (fatMatch) {
+    recipe.fat = parseInt(fatMatch[1]);
+  }
+  
+  // Extract tags/diet info
+  const tagsMatch = text.match(/(?:Dietary tags|Tags):\s*([^\n]+)/i);
+  if (tagsMatch) {
+    recipe.tags = tagsMatch[1].split(',').map(tag => tag.trim());
+  }
+  
+  // Check if we have a valid recipe
+  if (recipe.title && 
+      (recipe.ingredients.length > 0 || recipe.instructions.length > 0) && 
+      (recipe.calories > 0 || recipe.protein > 0)) {
+    
+    // Make sure we have some reasonable defaults
+    if (recipe.calories === 0) recipe.calories = 300;
+    if (recipe.protein === 0) recipe.protein = 20;
+    if (recipe.carbs === 0) recipe.carbs = 30;
+    if (recipe.fat === 0) recipe.fat = 15;
+    
+    return [recipe];
+  }
+  
+  return null;
 }
 
 async function generateGeminiResponse(prompt: string) {
@@ -223,28 +361,29 @@ serve(async (req) => {
     }
 
     // Build prompt with additional data if available
-    let prompt = message;
+    let chatPrompt = message;
     
     if (additionalData && dataType === 'exercise' && Array.isArray(additionalData)) {
       const exerciseSummary = additionalData.map(ex => 
         `Name: ${ex.name}, Target: ${ex.target}, Equipment: ${ex.equipment}`
       ).join('\n');
       
-      prompt = `${systemPrompt}\n\nUser query: ${message}\n\nI found these exercises that might be relevant to the user's query. Use this data to provide specific exercise recommendations:\n\n${exerciseSummary}\n\nPlease use this exercise data in your response and begin with "Here's a workout plan for you. You can add it to your workout page." Use simple, clean text format without markdown.`;
+      // Modify the system prompt to encourage structured JSON output
+      chatPrompt = `${systemPrompt}\n\nUser query: ${message}\n\nI found these exercises that might be relevant to the user's query. Use this data to provide specific exercise recommendations:\n\n${exerciseSummary}\n\nMake sure to format your response with a clear JSON structure that includes title, duration, calories, and exercises (with names, sets, and reps). This helps the app save the workout correctly. Begin with "Here's a workout plan for you. You can add it to your workout page." Use simple, clean text format without markdown.`;
     } else if (additionalData && dataType === 'recipe' && Array.isArray(additionalData)) {
       const recipeSummary = additionalData.map(recipe => 
         `Title: ${recipe.title}, Diet: ${recipe.diets?.join(', ') || 'N/A'}`
       ).join('\n');
       
-      prompt = `${systemPrompt}\n\nUser query: ${message}\n\nI found these recipes that might be relevant to the user's query. Use this data to provide specific meal recommendations:\n\n${recipeSummary}\n\nPlease use this recipe data in your response and begin with "Here's a recipe you might enjoy. You can save it to your recipe collection." Use simple, clean text format without markdown.`;
+      chatPrompt = `${systemPrompt}\n\nUser query: ${message}\n\nI found these recipes that might be relevant to the user's query. Use this data to provide specific meal recommendations:\n\n${recipeSummary}\n\nPlease use this recipe data in your response and begin with "Here's a recipe you might enjoy. You can save it to your recipe collection." Use simple, clean text format without markdown. Include structured recipe data with title, ingredients, instructions, and nutrition info.`;
     } else {
-      prompt = `${systemPrompt}\n\nUser query: ${message}\n\nPlease respond in simple, clean text format without markdown or special formatting.`;
+      chatPrompt = `${systemPrompt}\n\nUser query: ${message}\n\nPlease respond in simple, clean text format without markdown or special formatting. If the user is asking about recipes or meals, start with "Here's a recipe you might enjoy" and include structured recipe data. If the user is asking about workouts, start with "Here's a workout plan for you" and include structured workout data.`;
     }
 
-    console.log('Sending prompt to Gemini:', prompt.substring(0, 100) + '...');
+    console.log('Sending prompt to Gemini:', chatPrompt.substring(0, 100) + '...');
     
     // Send message to Gemini
-    const text = await generateGeminiResponse(prompt);
+    const text = await generateGeminiResponse(chatPrompt);
     
     console.log('Gemini response received:', text.substring(0, 100) + '...');
     
@@ -256,6 +395,17 @@ serve(async (req) => {
       .replace(/--/g, '')     // Remove strikethrough
       .replace(/```.*?```/gs, '') // Remove code blocks
       .replace(/#/g, '');     // Remove heading markdown
+    
+    // Try to extract recipe data if nutrition query and no API data
+    let extractedRecipeData = null;
+    if (dataType === 'recipe' && (!additionalData || additionalData.length === 0)) {
+      extractedRecipeData = extractRecipeFromText(cleanedText);
+      if (extractedRecipeData) {
+        console.log('Extracted recipe data from text response');
+        dataType = 'recipe';
+        additionalData = extractedRecipeData;
+      }
+    }
       
     // Return the chatbot response
     return new Response(

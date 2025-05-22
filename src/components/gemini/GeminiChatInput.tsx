@@ -10,6 +10,7 @@ interface GeminiChatInputProps {
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
   userSignedIn: boolean;
+  disabled?: boolean;
 }
 
 const GeminiChatInput: React.FC<GeminiChatInputProps> = ({
@@ -17,7 +18,8 @@ const GeminiChatInput: React.FC<GeminiChatInputProps> = ({
   setMessage,
   onSubmit,
   isLoading,
-  userSignedIn
+  userSignedIn,
+  disabled = false
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -31,7 +33,7 @@ const GeminiChatInput: React.FC<GeminiChatInputProps> = ({
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (message.trim() && !isLoading) {
+      if (message.trim() && !isLoading && !disabled) {
         onSubmit(e);
       }
     }
@@ -48,7 +50,7 @@ const GeminiChatInput: React.FC<GeminiChatInputProps> = ({
             onKeyPress={handleKeyPress}
             placeholder="Ask anything about fitness & wellness..."
             className="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10"
-            disabled={isLoading}
+            disabled={isLoading || disabled}
             ref={inputRef}
             aria-label="Chat message input"
           />
@@ -58,7 +60,7 @@ const GeminiChatInput: React.FC<GeminiChatInputProps> = ({
         </div>
         <Button 
           type="submit" 
-          disabled={!message.trim() || isLoading}
+          disabled={!message.trim() || isLoading || disabled}
           aria-label="Send message"
           className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-full p-2 h-10 w-10"
         >

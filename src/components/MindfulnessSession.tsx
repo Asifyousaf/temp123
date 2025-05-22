@@ -1,6 +1,3 @@
-
-// Fix build error by importing SoundType from the sound types definition
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,15 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, Volume2, VolumeX, Clock, Waves, SkipForward, Music } from 'lucide-react';
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 import useSounds from '../hooks/useSounds';
-import type { SoundType } from '../types/sound';
+import { SoundType } from "@/types/sound";
 
 interface MindfulnessSessionProps {
   sessionType: string;
   duration: number;
   onComplete: () => void;
   onCancel: () => void;
+  soundsReady?: boolean;
 }
 
 const formatTime = (seconds: number): string => {
@@ -28,11 +26,12 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
-  sessionType,
-  duration,
-  onComplete,
-  onCancel
+const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({ 
+  sessionType, 
+  duration, 
+  onComplete, 
+  onCancel,
+  soundsReady = false
 }) => {
   const [isPaused, setIsPaused] = useState(true);
   const [timeLeft, setTimeLeft] = useState(duration * 60); // convert minutes to seconds
@@ -42,6 +41,7 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [soundTestStatus, setSoundTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   
   const { play, pause, stop, isLoaded } = useSounds();
 
@@ -61,31 +61,71 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
     };
   }, [isPaused, timeLeft]);
 
-  // Play appropriate sound when session starts or sound type changes
+  // Preload sounds
   useEffect(() => {
-    if (!isPaused && isLoaded[soundType]) {
+    const preloadSounds = async () => {
+      try {
+        // Force loading of all sound types
+        await Promise.all([
+          new Audio('/sounds/meditation.mp3').load(),
+          new Audio('/sounds/ambient.mp3').load(),
+          new Audio('/sounds/nature.mp3').load(),
+          new Audio('/sounds/chimes.mp3').load()
+        ]);
+      } catch (error) {
+        console.error("Error preloading sounds:", error);
+      }
+    };
+    
+    preloadSounds();
+  }, []);
+
+  // Sound playing effect
+  useEffect(() => {
+    let audio: HTMLAudioElement | null = null;
+    
+    if (!isPaused) {
       const actualVolume = isMuted ? 0 : volume / 100;
-      play(soundType, { volume: actualVolume, loop: true });
+      try {
+        audio = new Audio(`/sounds/${soundType}.mp3`);
+        audio.volume = actualVolume;
+        audio.loop = true;
+        audio.play().catch(err => console.error("Error playing sound:", err));
+        setCurrentAudio(audio);
+      } catch (error) {
+        console.error("Error playing sound:", error);
+      }
+    } else if (currentAudio) {
+      currentAudio.pause();
     }
     
     return () => {
-      pause(soundType);
+      if (audio) {
+        audio.pause();
+      }
+      if (currentAudio && currentAudio !== audio) {
+        currentAudio.pause();
+      }
     };
   }, [isPaused, soundType, volume, isMuted]);
 
-  // Play chimes sound at specific intervals
+  // Interval chimes effect
   useEffect(() => {
     let intervalChimes: NodeJS.Timeout | null = null;
     
-    if (!isPaused && isLoaded.chimes) {
-      // Play chimes every 5 minutes
+    if (!isPaused) {
       const chimeInterval = 5 * 60; // 5 minutes in seconds
       
       intervalChimes = setInterval(() => {
-        // Only play if not at the very beginning or end
         if (timeLeft > 10 && timeLeft < (duration * 60 - 10)) {
-          const actualVolume = isMuted ? 0 : (volume / 100) * 0.3; // Play chimes at lower volume
-          play('chimes', { volume: actualVolume });
+          try {
+            const actualVolume = isMuted ? 0 : (volume / 100) * 0.5;
+            const chimeSound = new Audio('/sounds/chimes.mp3');
+            chimeSound.volume = actualVolume;
+            chimeSound.play().catch(err => console.error("Error playing chimes:", err));
+          } catch (error) {
+            console.error("Error playing chimes:", error);
+          }
         }
       }, chimeInterval * 1000);
     }
@@ -93,7 +133,7 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
     return () => {
       if (intervalChimes) clearInterval(intervalChimes);
     };
-  }, [isPaused, isLoaded.chimes, timeLeft, duration, isMuted, volume]);
+  }, [isPaused, timeLeft, duration, volume, isMuted]);
 
   const handlePlayPause = () => {
     if (isPaused) {
@@ -103,14 +143,14 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
         description: `Your ${sessionType.toLowerCase()} session has begun.`,
       });
       
-      // Play chimes sound to signal start
       if (isLoaded.chimes) {
         play('chimes', { volume: (isMuted ? 0 : volume / 100) });
       }
-      
     } else {
       setIsPaused(true);
-      pause(soundType);
+      if (currentAudio) {
+        currentAudio.pause();
+      }
     }
   };
 
@@ -122,66 +162,52 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
       setIsMuted(false);
     }
     
-    // Update playing sound volume if session is active
-    if (!isPaused && isLoaded[soundType]) {
-      const actualVolume = newVolume / 100;
-      
-      // Temporarily pause and restart with new volume
-      pause(soundType);
-      setTimeout(() => {
-        play(soundType, { volume: actualVolume, loop: true });
-      }, 50);
+    if (currentAudio) {
+      currentAudio.volume = newVolume / 100;
     }
   };
 
   const handleMuteToggle = () => {
     setIsMuted(!isMuted);
     
-    // Update sound if playing
-    if (!isPaused && isLoaded[soundType]) {
-      if (!isMuted) {
-        // Muting
-        pause(soundType);
-      } else {
-        // Unmuting
-        play(soundType, { volume: volume / 100, loop: true });
-      }
+    if (currentAudio) {
+      currentAudio.muted = !isMuted;
     }
   };
 
   const handleComplete = () => {
-    stop(soundType);
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
     
-    // Play completion sound
     if (isLoaded.chimes) {
       play('chimes', { volume: (isMuted ? 0 : volume / 100) });
     }
-    
-    toast({
-      title: "Session Completed",
-      description: `Well done! You've completed your ${sessionType.toLowerCase()} session.`,
-    });
     
     onComplete();
   };
 
   const handleCancel = () => {
-    stop(soundType);
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
     onCancel();
   };
 
   const handleSoundTypeChange = (newType: 'meditation' | 'ambient' | 'nature') => {
     if (newType !== soundType) {
-      // Stop current sound
-      if (!isPaused) {
-        stop(soundType);
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
       }
       
       setSoundType(newType);
       
-      // Start new sound if session is active
       if (!isPaused && isLoaded[newType]) {
-        play(newType, { volume: isMuted ? 0 : volume / 100, loop: true });
+        const audio = play(newType, { volume: isMuted ? 0 : volume / 100, loop: true });
+        setCurrentAudio(audio);
       }
     }
   };
@@ -189,43 +215,57 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
   const testSound = () => {
     setSoundTestStatus('testing');
     
-    // Try all sounds until one works
-    const soundTestTypes: SoundType[] = ['chimes', 'beep', 'notification', 'success'];
-    
-    const trySound = (index: number) => {
-      if (index >= soundTestTypes.length) {
+    // Try to play a test sound
+    try {
+      const audio = new Audio('/sounds/chimes.mp3');
+      audio.volume = 0.7;
+      
+      audio.onended = () => {
+        setSoundTestStatus('success');
+        toast({
+          title: "Sound Test Successful",
+          description: "Audio is working correctly!",
+        });
+      };
+      
+      audio.onerror = () => {
         setSoundTestStatus('failed');
         toast({
           title: "Sound Test Failed",
-          description: "We couldn't play any sounds. Please check your device volume and browser permissions.",
+          description: "We couldn't play the sound. Please check your device volume.",
           variant: "destructive"
         });
-        return;
-      }
+      };
       
-      const sType = soundTestTypes[index];
-      const audio = play(sType, { volume: 1.0 });
+      audio.play().catch(err => {
+        console.error("Error in sound test:", err);
+        setSoundTestStatus('failed');
+        toast({
+          title: "Sound Test Failed",
+          description: "Your browser blocked audio playback. Please check permissions and try again.",
+          variant: "destructive"
+        });
+      });
       
-      if (audio) {
-        audio.onended = () => {
-          setSoundTestStatus('success');
+      // Set a timeout in case the sound doesn't play or end
+      setTimeout(() => {
+        if (soundTestStatus === 'testing') {
+          setSoundTestStatus('failed');
           toast({
-            title: "Sound Test Successful",
-            description: "Audio is working correctly!",
+            title: "Sound Test Failed",
+            description: "We couldn't confirm if the sound played. Please check your device volume.",
+            variant: "destructive"
           });
-        };
-        
-        audio.onerror = () => {
-          // Try next sound
-          trySound(index + 1);
-        };
-      } else {
-        // Try next sound
-        trySound(index + 1);
-      }
-    };
-    
-    trySound(0);
+        }
+      }, 3000);
+    } catch (error) {
+      setSoundTestStatus('failed');
+      toast({
+        title: "Sound Test Failed",
+        description: "We couldn't play the sound. Please check your device volume and browser permissions.",
+        variant: "destructive"
+      });
+    }
   };
 
   const progress = ((duration * 60 - timeLeft) / (duration * 60)) * 100;
@@ -246,7 +286,6 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Sound Test Button */}
         <div className="text-center">
           <Button 
             variant="outline"
@@ -267,7 +306,6 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
           </p>
         </div>
         
-        {/* Timer Display */}
         <div className="text-center py-8">
           <AnimatePresence mode="wait">
             <motion.div
@@ -288,7 +326,6 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
           />
         </div>
 
-        {/* Play/Pause Button */}
         <div className="flex justify-center">
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -308,7 +345,6 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
           </motion.button>
         </div>
 
-        {/* Sound Controls */}
         <AnimatePresence>
           {showControls && (
             <motion.div
@@ -464,4 +500,3 @@ const MindfulnessSession: React.FC<MindfulnessSessionProps> = ({
 };
 
 export default MindfulnessSession;
-

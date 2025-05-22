@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 // Sound types available in the app
 export type SoundType = 'meditation' | 'ambient' | 'nature' | 'chimes' | 'beep' | 'success' | 'failure' | 'notification';
 
-// Sound library with URLs
+// Preloaded sound URLs - using free assets from Mixkit
 const soundLibrary: Record<SoundType, string> = {
   meditation: 'https://assets.mixkit.co/sfx/preview/mixkit-meditation-bell-sound-2293.mp3',
   ambient: 'https://assets.mixkit.co/sfx/preview/mixkit-forest-stream-ambience-1186.mp3',
@@ -23,7 +23,7 @@ export interface SoundOptions {
 }
 
 const useSounds = () => {
-  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  const audioElementsRef = useRef<Record<string, HTMLAudioElement>>({});
   const [isLoaded, setIsLoaded] = useState<Record<SoundType, boolean>>({
     meditation: false,
     ambient: false,
@@ -35,138 +35,235 @@ const useSounds = () => {
     notification: false
   });
   const [isMuted, setIsMuted] = useState(false);
+  const [activeAudios, setActiveAudios] = useState<Set<HTMLAudioElement>>(new Set());
 
   // Preload sounds
   useEffect(() => {
-    const loadSounds = async () => {
-      const loadPromises = Object.entries(soundLibrary).map(([key, url]) => {
-        return new Promise<void>((resolve) => {
-          const audio = new Audio(url);
-          audio.preload = 'auto';
-          audio.addEventListener('canplaythrough', () => {
-            console.log(`Sound loaded successfully: ${key}`);
-            setIsLoaded(prev => ({ ...prev, [key]: true }));
-            resolve();
-          });
-          
-          // Add error handling
-          audio.addEventListener('error', (e) => {
-            console.error(`Failed to load sound: ${key}`, e);
-            // Still mark as loaded to prevent blocking the app
-            setIsLoaded(prev => ({ ...prev, [key]: true }));
-            resolve(); // Resolve anyway to not block other sounds
-          });
-          
-          audioRefs.current[key] = audio;
-        });
-      });
-      
+    console.log('Starting to preload sounds...');
+    
+    const loadSound = async (type: SoundType, url: string) => {
       try {
-        await Promise.all(loadPromises);
-        console.log("All sounds loaded successfully");
-      } catch (error) {
-        console.error("Failed to load some sounds:", error);
+        // Create audio element
+        const audio = new Audio();
+        audio.preload = 'auto';
+        
+        // Create a promise to track loading
+        const loadPromise = new Promise<void>((resolve, reject) => {
+          audio.addEventListener('canplaythrough', () => {
+            console.log(`Sound loaded successfully: ${type}`);
+            setIsLoaded(prev => ({ ...prev, [type]: true }));
+            resolve();
+          }, { once: true });
+          
+          audio.addEventListener('error', (error) => {
+            console.error(`Error loading sound ${type}:`, error);
+            reject(error);
+          }, { once: true });
+        });
+        
+        // Set the source after attaching event listeners
+        audio.src = url;
+        audioElementsRef.current[type] = audio;
+        
+        // Load the audio
+        audio.load();
+        
+        // Wait for loading to complete or timeout after 5 seconds
+        try {
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Loading ${type} timed out`)), 5000)
+          );
+          await Promise.race([loadPromise, timeoutPromise]);
+        } catch (err) {
+          console.warn(`Could not fully preload ${type}, continuing anyway:`, err);
+          // Mark as loaded anyway to prevent blocking
+          setIsLoaded(prev => ({ ...prev, [type]: true }));
+        }
+      } catch (err) {
+        console.warn(`Failed to load sound ${type}:`, err);
+        // Mark as loaded anyway to avoid blocking the app
+        setIsLoaded(prev => ({ ...prev, [type]: true }));
       }
     };
     
-    loadSounds();
+    // Load all sounds in parallel
+    const loadAllSounds = async () => {
+      const loadPromises = Object.entries(soundLibrary).map(
+        ([type, url]) => loadSound(type as SoundType, url)
+      );
+      
+      try {
+        await Promise.all(loadPromises);
+        console.log('All sounds preloaded successfully.');
+      } catch (error) {
+        console.warn('Some sounds failed to preload but app will continue:', error);
+      }
+    };
     
-    // Cleanup
+    loadAllSounds();
+    
     return () => {
-      Object.values(audioRefs.current).forEach(audio => {
-        if (audio) {
+      // Clean up all audio elements when the hook unmounts
+      Object.values(audioElementsRef.current).forEach(audio => {
+        try {
           audio.pause();
           audio.src = '';
+        } catch (e) {
+          console.error('Error cleaning up audio:', e);
         }
       });
     };
   }, []);
 
+  const play = (type: SoundType, options: SoundOptions = {}): HTMLAudioElement | null => {
+    const { volume = 0.5, loop = false, onEnded } = options;
+    
+    try {
+      // For better reliability, create a new audio instance for each play
+      let audio: HTMLAudioElement;
+      
+      // If we already have this sound type playing and it's set to loop,
+      // reuse the same audio element to avoid overlapping sounds
+      const existingAudio = audioElementsRef.current[type];
+      if (loop && existingAudio && existingAudio.loop) {
+        audio = existingAudio;
+        
+        // If it's already playing, just adjust volume and return
+        if (!audio.paused) {
+          audio.volume = isMuted ? 0 : volume;
+          return audio;
+        }
+      } else {
+        // Create a new audio element
+        audio = new Audio(soundLibrary[type]);
+        audioElementsRef.current[type] = audio;
+      }
+      
+      // Configure the audio
+      audio.volume = isMuted ? 0 : volume;
+      audio.loop = loop;
+      
+      if (onEnded) {
+        audio.onended = () => {
+          onEnded();
+          setActiveAudios(current => {
+            const updated = new Set(current);
+            updated.delete(audio);
+            return updated;
+          });
+        };
+      }
+      
+      // Play the audio with better error handling
+      const playPromise = audio.play();
+      
+      if (playPromise) {
+        playPromise.then(() => {
+          // Add to active audios set
+          setActiveAudios(current => {
+            const updated = new Set(current);
+            updated.add(audio);
+            return updated;
+          });
+          console.log(`Playing sound ${type}`);
+        }).catch(error => {
+          // Handle autoplay restrictions
+          console.error(`Failed to play ${type}:`, error);
+          if (error.name === 'NotAllowedError') {
+            console.log('Autoplay restricted. User interaction required.');
+            
+            // Create a one-time click handler that will try to play the sound
+            const unlockAudio = () => {
+              audio.play().catch(e => console.error(`Still couldn't play ${type}:`, e));
+              document.removeEventListener('click', unlockAudio);
+              document.removeEventListener('touchstart', unlockAudio);
+            };
+            
+            document.addEventListener('click', unlockAudio, { once: true });
+            document.addEventListener('touchstart', unlockAudio, { once: true });
+          }
+        });
+      }
+      
+      return audio;
+    } catch (error) {
+      console.error(`Error playing sound ${type}:`, error);
+      return null;
+    }
+  };
+
   const setGlobalMute = (muted: boolean) => {
     setIsMuted(muted);
     
-    // Apply to all currently playing sounds
-    Object.values(audioRefs.current).forEach(audio => {
+    // Apply to all currently active audios
+    activeAudios.forEach(audio => {
       if (audio) {
         audio.muted = muted;
       }
     });
   };
 
-  const play = (type: SoundType, options: SoundOptions = {}) => {
-    const { volume = 0.5, loop = false, onEnded } = options;
-    const audio = audioRefs.current[type];
-    
-    if (audio) {
-      audio.volume = volume;
-      audio.loop = loop;
-      audio.muted = isMuted;
-      
-      if (onEnded) {
-        audio.onended = onEnded;
-      }
-      
-      // Reset time to start if it was already played
-      audio.currentTime = 0;
-      
-      // Play with user interaction handling
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.error("Playback prevented by browser:", error);
-          // Try again with user interaction
-          document.addEventListener('click', function playOnClick() {
-            audio.play().catch(e => console.error("Still couldn't play audio:", e));
-            document.removeEventListener('click', playOnClick);
-          }, { once: true });
-        });
-      }
-      
-      return audio; // Return the audio element for more control
-    }
-    
-    return null;
-  };
-
   const pause = (type: SoundType) => {
-    const audio = audioRefs.current[type];
+    const audio = audioElementsRef.current[type];
     if (audio) {
       audio.pause();
+      setActiveAudios(current => {
+        const updated = new Set(current);
+        updated.delete(audio);
+        return updated;
+      });
+    }
+  };
+
+  const resume = (type: SoundType) => {
+    const audio = audioElementsRef.current[type];
+    if (audio) {
+      audio.play().catch(error => console.error(`Error resuming sound ${type}:`, error));
+      setActiveAudios(current => {
+        const updated = new Set(current);
+        updated.add(audio);
+        return updated;
+      });
     }
   };
 
   const stop = (type: SoundType) => {
-    const audio = audioRefs.current[type];
+    const audio = audioElementsRef.current[type];
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
+      setActiveAudios(current => {
+        const updated = new Set(current);
+        updated.delete(audio);
+        return updated;
+      });
     }
   };
 
   const stopAll = () => {
-    Object.values(audioRefs.current).forEach(audio => {
-      if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
+    activeAudios.forEach(audio => {
+      audio.pause();
+      audio.currentTime = 0;
     });
+    setActiveAudios(new Set());
   };
 
   const setVolume = (type: SoundType, volume: number) => {
-    const audio = audioRefs.current[type];
+    const audio = audioElementsRef.current[type];
     if (audio) {
       audio.volume = Math.max(0, Math.min(1, volume)); // Ensure volume is between 0 and 1
     }
   };
 
-  const isPlaying = (type: SoundType) => {
-    const audio = audioRefs.current[type];
+  const isPlaying = (type: SoundType): boolean => {
+    const audio = audioElementsRef.current[type];
     return audio ? !audio.paused : false;
   };
 
   return { 
     play, 
-    pause, 
+    pause,
+    resume,
     stop, 
     stopAll, 
     setVolume,

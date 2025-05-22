@@ -24,7 +24,9 @@ import TermsOfServicePage from "./pages/TermsOfServicePage";
 import CookiePolicyPage from "./pages/CookiePolicyPage";
 import SafetyCenterPage from "./pages/SafetyCenterPage";
 import CommunityGuidelinesPage from "./pages/CommunityGuidelinesPage";
+import ExercisesPage from "./pages/ExercisesPage";
 import GeminiChat from "./components/gemini/GeminiChat";
+import SubscriptionPage from "./pages/SubscriptionPage";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +47,8 @@ const App = () => (
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/store" element={<StorePage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/exercises" element={<ExercisesPage />} />
+          <Route path="/subscription" element={<SubscriptionPage />} />
           
           {/* Footer Pages */}
           <Route path="/about-us" element={<AboutPage />} />

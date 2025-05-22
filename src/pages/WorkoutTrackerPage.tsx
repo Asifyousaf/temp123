@@ -1,10 +1,9 @@
-
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
-import { PlusCircle, Calendar, LineChart, Dumbbell } from 'lucide-react';
+import { PlusCircle, Calendar, ArrowRight, LineChart, Dumbbell, Clock } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import WorkoutForm from '../components/WorkoutForm';
@@ -18,16 +17,32 @@ const WorkoutTrackerPage = () => {
   const [activeView, setActiveView] = useState('summary');
   const [isLoading, setIsLoading] = useState(true);
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
-  const [userWorkouts, setUserWorkouts] = useState<any[]>([]);
-  const [aiWorkouts, setAIWorkouts] = useState<any[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
 
+  // Authentication and session handling
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setIsLoading(false);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Error fetching session:", error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch authentication session",
+            variant: "destructive"
+          });
+        }
+        
+        setSession(session);
+        setIsLoading(false);
+      } catch (e) {
+        console.error("Exception in getSession:", e);
+        setIsLoading(false);
+      }
     };
+    
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -37,6 +52,7 @@ const WorkoutTrackerPage = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Redirect if not logged in
   useEffect(() => {
     if (!isLoading && !session) {
       toast({
@@ -48,55 +64,38 @@ const WorkoutTrackerPage = () => {
     }
   }, [session, isLoading, navigate]);
 
-  const fetchUserWorkouts = useCallback(async () => {
-    if (!session?.user?.id) {
-      setUserWorkouts([]);
-      return;
-    }
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('workouts')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('date', { ascending: false });
-      if (error) throw error;
-      setUserWorkouts(data || []);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load workouts",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [session]);
-
-  useEffect(() => {
-    fetchUserWorkouts();
-  }, [fetchUserWorkouts]);
-
+  // Handle workout completion
   const handleWorkoutComplete = async (workoutData: any) => {
     try {
-      if (!session?.user?.id) throw new Error("No user session");
+      if (!session?.user?.id) {
+        toast({
+          title: "Authentication required",
+          description: "Please sign in to save workouts",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const { error } = await supabase.from('workouts').insert({
         user_id: session.user.id,
         title: workoutData.title,
         type: workoutData.type,
         duration: workoutData.duration,
         calories_burned: workoutData.calories_burned,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString().split('T')[0]
       });
+
       if (error) throw error;
+      
       toast({
         title: "Workout Completed",
         description: "Your workout has been recorded successfully!",
       });
+      
       setActiveWorkout(null);
       setActiveView('history');
-      await fetchUserWorkouts();
     } catch (error: any) {
+      console.error("Error saving workout:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to save workout data",
@@ -105,91 +104,21 @@ const WorkoutTrackerPage = () => {
     }
   };
 
-  const handleStartWorkout = (workout: any, isAI = false) => {
-    // Defensive: Ensure workout has exercises array
-    if (isAI && (!workout.exercises || workout.exercises.length === 0)) {
-      workout.exercises = [
-        {
-          name: "Jumping Jacks",
-          sets: 3,
-          reps: 15,
-          duration: 60,
-          restTime: 30,
-          instructions: [
-            "Start with feet together and arms at sides",
-            "Jump and spread feet, raise arms overhead",
-            "Jump back to start position",
-            "Repeat"
-          ]
-        }
-      ];
-    }
-    setActiveWorkout({ ...workout, isAI });
+  const handleStartWorkout = (workout: any) => {
+    setActiveWorkout(workout);
     setActiveView('active-workout');
   };
 
+  // Scroll to top when page loads
   useEffect(() => {
-    // Ensure AI workouts include exercises arrays to avoid no exercises error
-    setAIWorkouts([
-      {
-        id: 'ai-1',
-        title: 'AI Generated Full Body Routine',
-        type: 'Strength Training',
-        duration: 30,
-        calories_burned: 250,
-        exercises: [
-          {
-            name: "Push-ups",
-            sets: 3,
-            reps: 12,
-            duration: 60,
-            restTime: 30,
-            instructions: [
-              "Start in plank position with arms straight",
-              "Lower body until chest nearly touches floor",
-              "Push back up",
-              "Keep body straight"
-            ]
-          },
-          {
-            name: "Air Squats",
-            sets: 3,
-            reps: 15,
-            duration: 60,
-            restTime: 30,
-            instructions: [
-              "Stand feet shoulder-width apart",
-              "Push hips back and bend knees",
-              "Lower thighs parallel to floor",
-              "Push through heels to stand"
-            ]
-          }
-        ]
-      },
-      {
-        id: 'ai-2',
-        title: 'AI Cardio Blast',
-        type: 'Cardio',
-        duration: 20,
-        calories_burned: 220,
-        exercises: [
-          {
-            name: "Mountain Climbers",
-            sets: 3,
-            reps: 20,
-            duration: 60,
-            restTime: 30,
-            instructions: [
-              "Start in plank position",
-              "Drive knees alternately to chest quickly"
-            ]
-          }
-        ]
-      }
-    ]);
-  }, []);
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, [location.pathname]);
 
-  if (isLoading || !session) {
+  // Loading state
+  if (isLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-screen">
@@ -199,8 +128,32 @@ const WorkoutTrackerPage = () => {
     );
   }
 
+  // If not logged in, show auth message
+  if (!session) {
+    return (
+      <Layout>
+        <div className="pt-24 pb-16 bg-gradient-to-br from-purple-500 to-purple-700 text-white">
+          <div className="container mx-auto px-4 py-16">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">Workout Tracker</h1>
+            <p className="text-lg md:text-xl max-w-2xl mb-8">
+              Log your workouts, track your progress, and achieve your fitness goals.
+            </p>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-16 text-center">
+          <h2 className="text-2xl font-bold mb-4">Sign in to access the workout tracker</h2>
+          <p className="mb-8">Create an account or sign in to track your fitness journey</p>
+          <Button onClick={() => navigate('/auth')} className="bg-purple-600">
+            Sign In
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
+      {/* Header section */}
       <div className="pt-24 pb-16 bg-gradient-to-br from-purple-500 to-purple-700 text-white">
         <div className="container mx-auto px-4 py-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">Workout Tracker</h1>
@@ -210,113 +163,121 @@ const WorkoutTrackerPage = () => {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 pt-20">
         {!activeWorkout ? (
           <>
+            {/* Navigation tabs */}
             <div className="flex flex-wrap mb-8 space-x-2">
-              <Button
+              <Button 
                 variant={activeView === 'summary' ? 'default' : 'outline'}
                 onClick={() => setActiveView('summary')}
                 className="mb-2"
               >
                 <LineChart className="mr-2 h-4 w-4" /> Summary
               </Button>
-              <Button
+              <Button 
                 variant={activeView === 'log' ? 'default' : 'outline'}
                 onClick={() => setActiveView('log')}
                 className="mb-2"
               >
                 <PlusCircle className="mr-2 h-4 w-4" /> Log Workout
               </Button>
-              <Button
+              <Button 
                 variant={activeView === 'history' ? 'default' : 'outline'}
                 onClick={() => setActiveView('history')}
                 className="mb-2"
               >
                 <Calendar className="mr-2 h-4 w-4" /> Workout History
               </Button>
-              <Button
+              <Button 
                 variant={activeView === 'start-workout' ? 'default' : 'outline'}
                 onClick={() => setActiveView('start-workout')}
                 className="mb-2"
               >
-                <Dumbbell className="mr-2 h-4 w-4" /> Start Workout
+                <Dumbbell className="mr-2 h-4 w-4" /> Quick Start
               </Button>
+              <Link to="/workouts">
+                <Button variant="outline" className="mb-2">
+                  <Dumbbell className="mr-2 h-4 w-4" /> Browse All Workouts
+                </Button>
+              </Link>
             </div>
 
             {activeView === 'summary' && (
-              <>
-                <div className="mb-6 space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
-                        Your Workouts
-                      </CardTitle>
-                      <CardDescription>Workouts you have logged</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {userWorkouts.length === 0 ? (
-                        <p className="text-gray-600">No workouts logged yet.</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {userWorkouts.map(workout => (
-                            <li key={workout.id} className="flex justify-between items-center border-b border-gray-200 py-2">
-                              <span>{workout.title} ({workout.type})</span>
-                              <Button variant="outline" size="sm" onClick={() => handleStartWorkout(workout, false)}>
-                                Start Workout
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
-                        AI Suggested Workouts
-                      </CardTitle>
-                      <CardDescription>Workouts generated by AI</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {aiWorkouts.length === 0 ? (
-                        <p className="text-gray-600">No AI workouts available.</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {aiWorkouts.map(workout => (
-                            <li key={workout.id} className="flex justify-between items-center border-b border-gray-200 py-2">
-                              <span>{workout.title} ({workout.type}) - {workout.duration} min</span>
-                              <Button variant="outline" size="sm" onClick={() => handleStartWorkout(workout, true)}>
-                                Start Workout
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <WorkoutStats userId={session.user.id} />
-              </>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {/* Quick Log Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <PlusCircle className="mr-2 h-5 w-5 text-purple-600" />
+                      Quick Log Workout
+                    </CardTitle>
+                    <CardDescription>Record your latest workout session</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 mb-4">Keep track of your fitness journey by logging your workouts.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button onClick={() => setActiveView('log')} className="w-full">
+                      Log Workout <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+                
+                {/* View History Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Calendar className="mr-2 h-5 w-5 text-purple-600" />
+                      View History
+                    </CardTitle>
+                    <CardDescription>Review your past workout sessions</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 mb-4">See your progress over time and stay motivated.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="outline" onClick={() => setActiveView('history')} className="w-full">
+                      View History <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+                
+                {/* Browse Workouts Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Dumbbell className="mr-2 h-5 w-5 text-purple-600" />
+                      Browse Workouts
+                    </CardTitle>
+                    <CardDescription>Find workout routines to follow</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 mb-4">Access a variety of guided workout routines with video demonstrations.</p>
+                  </CardContent>
+                  <CardFooter>
+                    <Link to="/workouts" className="w-full">
+                      <Button variant="default" className="w-full">
+                        Browse Workouts <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </CardFooter>
+                </Card>
+              </div>
             )}
 
-            {activeView === 'log' && <WorkoutForm userId={session.user.id} onSuccess={() => {
-              setActiveView('history');
-              fetchUserWorkouts();
-            }} />}
-
-            {activeView === 'history' && <WorkoutHistoryList userId={session.user.id} />}
+            {/* View content based on active tab */}
+            {activeView === 'summary' && session?.user?.id && <WorkoutStats userId={session.user.id} />}
+            {activeView === 'log' && session?.user?.id && <WorkoutForm userId={session.user.id} onSuccess={() => setActiveView('history')} />}
+            {activeView === 'history' && session?.user?.id && <WorkoutHistoryList userId={session.user.id} />}
             {activeView === 'start-workout' && <WorkoutList onSelectWorkout={handleStartWorkout} />}
           </>
         ) : (
-          <WorkoutSession
-            workout={activeWorkout}
-            onComplete={handleWorkoutComplete}
-            onCancel={() => setActiveWorkout(null)}
+          // Show active workout session
+          <WorkoutSession 
+            workout={activeWorkout} 
+            onComplete={handleWorkoutComplete} 
+            onCancel={() => setActiveWorkout(null)} 
           />
         )}
       </div>

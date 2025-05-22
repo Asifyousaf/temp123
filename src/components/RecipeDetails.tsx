@@ -1,108 +1,216 @@
 
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Clock, Users, Heart, Check, Flame, Apple, Beef, Egg, Trash2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Clock, Users, Check, Flame } from 'lucide-react';
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import useSounds from '@/hooks/useSounds';
 
 interface RecipeDetailsProps {
-  recipe: {
-    title: string;
-    image: string;
-    time: string;
-    servings: number;
-    calories: number;
-    description: string;
-    ingredients: string[];
-    instructions: string[];
-    tags: string[];
-  };
+  recipe: any;
   isOpen: boolean;
   onClose: () => void;
+  onSave?: (recipe: any) => void;
+  isAlreadySaved?: boolean;
+  onDelete?: (id: string) => void;
 }
 
-const RecipeDetails: React.FC<RecipeDetailsProps> = ({ recipe, isOpen, onClose }) => {
+const RecipeDetails: React.FC<RecipeDetailsProps> = ({ 
+  recipe, 
+  isOpen, 
+  onClose,
+  onSave,
+  isAlreadySaved = false,
+  onDelete
+}) => {
+  const { toast } = useToast();
+  const sounds = useSounds();
+  
+  if (!recipe) return null;
+
+  const handleDelete = async () => {
+    if (!recipe.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('nutrition_logs')
+        .delete()
+        .eq('id', recipe.id);
+
+      if (error) throw error;
+      
+      // Play success sound when recipe is deleted
+      if (sounds.isLoaded.success) {
+        sounds.play('success', { volume: 0.5 });
+      }
+
+      toast({
+        title: "Recipe deleted",
+        description: "The recipe has been removed from your collection",
+      });
+      
+      if (onDelete) {
+        onDelete(recipe.id);
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error('Error deleting recipe:', error);
+      
+      // Play error sound when deletion fails
+      if (sounds.isLoaded.failure) {
+        sounds.play('failure', { volume: 0.5 });
+      }
+      
+      toast({
+        title: "Error",
+        description: "Failed to delete recipe. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">{recipe.title}</DialogTitle>
+          <DialogDescription className="text-base text-gray-500 mt-2">
+            {recipe.description}
+          </DialogDescription>
         </DialogHeader>
         
-        <div className="grid gap-6">
-          <div className="relative rounded-lg overflow-hidden">
+        <div className="space-y-6 pt-4">
+          <div className="rounded-lg overflow-hidden h-64 md:h-80">
             <img 
               src={recipe.image} 
-              alt={recipe.title}
-              className="w-full h-64 object-cover"
+              alt={recipe.title} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80";
+              }}
             />
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-              <div className="flex gap-4 text-white">
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-1" />
-                  <span className="text-sm">{recipe.time}</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="h-4 w-4 mr-1" />
-                  <span className="text-sm">{recipe.servings} servings</span>
-                </div>
-                <div className="flex items-center">
-                  <Flame className="h-4 w-4 mr-1" />
-                  <span className="text-sm">{recipe.calories} kcal</span>
-                </div>
-              </div>
-            </div>
           </div>
           
-          <div>
-            <h3 className="text-lg font-medium mb-2">Description</h3>
-            <p className="text-gray-600">{recipe.description}</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-lg font-medium mb-3">Ingredients</h3>
-              <ul className="space-y-2">
-                {recipe.ingredients.map((ingredient, index) => (
-                  <li key={index} className="flex items-start">
-                    <span className="bg-green-100 text-green-800 p-1 rounded-full mr-2 mt-0.5">
-                      <Check className="h-3 w-3" />
-                    </span>
-                    <span>{ingredient}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-medium mb-3">Instructions</h3>
-              <ol className="space-y-4">
-                {recipe.instructions.map((instruction, index) => (
-                  <li key={index} className="flex">
-                    <span className="bg-purple-100 text-purple-800 rounded-full h-6 w-6 flex items-center justify-center mr-3 shrink-0 font-medium">
-                      {index + 1}
-                    </span>
-                    <span className="text-gray-600">{instruction}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap gap-2 mt-2">
-            {recipe.tags.map((tag, index) => (
-              <span 
-                key={index}
-                className="bg-purple-100 text-purple-800 text-xs px-3 py-1 rounded-full"
-              >
+          <div className="flex flex-wrap gap-2">
+            {recipe.tags && recipe.tags.map((tag: string, index: number) => (
+              <Badge key={index} variant="secondary">
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
           
-          <div className="flex justify-end">
-            <Button onClick={onClose} variant="outline">Close</Button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Clock className="h-5 w-5 text-green-600 mr-2" />
+              <span className="font-medium">{recipe.time}</span>
+            </div>
+            <div className="flex items-center">
+              <Users className="h-5 w-5 text-green-600 mr-2" />
+              <span className="font-medium">{recipe.servings} {recipe.servings === 1 ? 'serving' : 'servings'}</span>
+            </div>
+            {recipe.calories && (
+              <div className="flex items-center">
+                <Flame className="h-5 w-5 text-orange-500 mr-2" />
+                <span className="font-medium text-orange-500">{recipe.calories} calories per serving</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Nutrition information */}
+          {(recipe.protein || recipe.carbs || recipe.fat) && (
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-3 text-green-800">Nutrition Facts (per serving)</h3>
+              <div className="grid grid-cols-3 gap-4">
+                {recipe.protein && (
+                  <div className="flex flex-col items-center p-2 bg-white rounded-lg">
+                    <Beef className="h-5 w-5 text-red-500 mb-1" />
+                    <span className="font-bold text-lg">{recipe.protein}g</span>
+                    <span className="text-xs text-gray-600">Protein</span>
+                  </div>
+                )}
+                {recipe.carbs && (
+                  <div className="flex flex-col items-center p-2 bg-white rounded-lg">
+                    <Apple className="h-5 w-5 text-green-500 mb-1" />
+                    <span className="font-bold text-lg">{recipe.carbs}g</span>
+                    <span className="text-xs text-gray-600">Carbs</span>
+                  </div>
+                )}
+                {recipe.fat && (
+                  <div className="flex flex-col items-center p-2 bg-white rounded-lg">
+                    <Egg className="h-5 w-5 text-yellow-500 mb-1" />
+                    <span className="font-bold text-lg">{recipe.fat}g</span>
+                    <span className="text-xs text-gray-600">Fat</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Ingredients</h3>
+            <ul className="list-disc list-inside space-y-2">
+              {recipe.ingredients && recipe.ingredients.map((ingredient: string, index: number) => (
+                <li key={index} className="text-gray-700">{ingredient}</li>
+              ))}
+            </ul>
+          </div>
+          
+          <Separator />
+          
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Instructions</h3>
+            <ol className="list-decimal list-inside space-y-4">
+              {recipe.instructions && recipe.instructions.map((step: string, index: number) => (
+                <li key={index} className="text-gray-700">
+                  <span className="font-medium text-green-800">Step {index + 1}:</span> {step}
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
+        
+        <DialogFooter className="pt-6 flex flex-wrap gap-2">
+          {onSave && (
+            isAlreadySaved ? (
+              <Button disabled className="gap-2 bg-green-100 text-green-800">
+                <Check className="h-4 w-4" />
+                Recipe Saved
+              </Button>
+            ) : (
+              <Button onClick={() => onSave(recipe)} className="gap-2 bg-green-600 hover:bg-green-700">
+                <Heart className="h-4 w-4" />
+                Save Recipe
+              </Button>
+            )
+          )}
+          
+          {/* Always show delete button for recipes with IDs */}
+          {recipe.id && (
+            <Button 
+              onClick={handleDelete} 
+              variant="destructive" 
+              className="gap-2 bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Recipe
+            </Button>
+          )}
+          
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -86,6 +86,48 @@ export type Database = {
           },
         ]
       }
+      free_usage: {
+        Row: {
+          id: string
+          last_reset_date: string
+          requests_left: number
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_reset_date?: string
+          requests_left?: number
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_reset_date?: string
+          requests_left?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      newsletter_subscribers: {
+        Row: {
+          active: boolean
+          created_at: string
+          email: string
+          id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          email: string
+          id?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       nutrition_logs: {
         Row: {
           calories: number
@@ -97,6 +139,7 @@ export type Database = {
           id: string
           meal_type: string
           protein: number
+          recipe_details: Json | null
           user_id: string
         }
         Insert: {
@@ -109,6 +152,7 @@ export type Database = {
           id?: string
           meal_type: string
           protein: number
+          recipe_details?: Json | null
           user_id: string
         }
         Update: {
@@ -121,6 +165,7 @@ export type Database = {
           id?: string
           meal_type?: string
           protein?: number
+          recipe_details?: Json | null
           user_id?: string
         }
         Relationships: [
@@ -210,12 +255,46 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          active: boolean
+          ai_requests_left: number | null
+          created_at: string
+          expires_at: string
+          id: string
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          ai_requests_left?: number | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          ai_requests_left?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       workouts: {
         Row: {
           calories_burned: number
           created_at: string | null
           date: string | null
           duration: number
+          exercises: Json | null
           id: string
           title: string
           type: string
@@ -226,6 +305,7 @@ export type Database = {
           created_at?: string | null
           date?: string | null
           duration: number
+          exercises?: Json | null
           id?: string
           title: string
           type: string
@@ -236,6 +316,7 @@ export type Database = {
           created_at?: string | null
           date?: string | null
           duration?: number
+          exercises?: Json | null
           id?: string
           title?: string
           type?: string

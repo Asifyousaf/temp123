@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -12,17 +11,42 @@ const corsHeaders = {
 };
 
 // System prompt for the AI
-const systemPrompt = `
-You are a certified personal trainer and nutritionist. You help users with beginner-friendly workout plans, meal suggestions, calorie advice, and basic meditation tips. Always ask users about their goals, fitness level, and dietary preferences before giving answers. Never give medical advice. If someone has a health condition or injury, tell them to consult a doctor. Be friendly, short, and motivating in tone. Avoid extreme diets or unsafe recommendations. All responses must be under 120 words unless the user asks for more detail.
+const getSystemPrompt = (subscriptionTier: number) => {
+  // Base prompt for all subscription levels
+  let basePrompt = `
+You are a certified personal trainer and nutritionist. You help users with beginner-friendly workout plans, meal suggestions, calorie advice, and basic meditation tips. Always ask users about their goals, fitness level, and dietary preferences before giving answers. Never give medical advice. If someone has a health condition or injury, tell them to consult a doctor. Be friendly, short, and motivating in tone. Avoid extreme diets or unsafe recommendations.`;
 
+  // Add tier-specific capabilities
+  if (subscriptionTier >= 3) {
+    // Premium tier
+    basePrompt += `
+You can provide unlimited detailed workout plans, nutrition plans, and advanced fitness advice.
+When users ask about workout routines or meal plans, provide comprehensive, personalized information using the available data sources.
+For premium users, you can generate highly customized workout and nutrition plans based on their specific goals and preferences.`;
+  } else if (subscriptionTier >= 2) {
+    // Basic paid tier
+    basePrompt += `
+You can provide detailed workout plans and meal suggestions, but keep recommendations somewhat general.
+When users ask about workout routines or nutrition advice, you can offer personalized suggestions based on their goals.`;
+  } else {
+    // Free tier
+    basePrompt += `
+For free users, keep your answers brief and more general. If they request very specific plans or detailed advice, gently remind them that detailed custom plans are available with premium subscriptions.
+You can still be helpful, but avoid providing highly detailed workout or meal plans.`;
+  }
+
+  // Common instructions for all tiers
+  basePrompt += `
 When users ask about workout routines for specific body parts or goals, you should mention that you're checking the ExerciseDB for accurate information.
 
 When users ask about meal plans, recipes, or nutrition advice, you should mention that you're checking Spoonacular's database for verified recipes and nutritional information.
 
 If the user wants to add a workout to their routine, format the workout plan with a clear title, description, and list of exercises in a structured way. Start with: "WORKOUT_PLAN: {title}|{type}|{level}|{description}|{exercises}" so the system can parse it.
 
-If the user wants meal suggestions, format them in a way that can be saved: "MEAL_PLAN: {title}|{diet}|{calories}|{description}". 
-`;
+If the user wants meal suggestions, format them in a way that can be saved: "MEAL_PLAN: {title}|{diet}|{calories}|{description}".`;
+
+  return basePrompt;
+};
 
 // Function to detect if user is asking for workout information
 function isWorkoutQuery(query: string): boolean {
@@ -135,8 +159,8 @@ serve(async (req) => {
   }
   
   try {
-    const { message, history, userProfile } = await req.json();
-    console.log('Request received:', { message, historyLength: history?.length, userProfile });
+    const { message, history, userProfile, subscriptionTier = 1 } = await req.json();
+    console.log('Request received:', { message, historyLength: history?.length, userProfile, subscriptionTier });
     
     // Check if API keys are available
     if (!openAIApiKey) {
@@ -144,7 +168,7 @@ serve(async (req) => {
     }
     
     let openAIMessages = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: getSystemPrompt(subscriptionTier) }
     ];
     
     // Add user profile information if available
@@ -156,6 +180,7 @@ serve(async (req) => {
         - Age: ${userProfile.age || 'Not specified'}
         - Weight: ${userProfile.weight ? `${userProfile.weight} kg` : 'Not specified'}
         - Height: ${userProfile.height ? `${userProfile.height} cm` : 'Not specified'}
+        - Subscription: ${subscriptionTier === 3 ? 'Premium' : subscriptionTier === 2 ? 'Basic' : 'Free'} tier
       `;
       openAIMessages.push({ role: 'system', content: profilePrompt });
     }
@@ -178,8 +203,12 @@ serve(async (req) => {
     // Check if we should fetch additional data
     let additionalData = null;
     let dataSource = null;
+    let recipeData = null;
     
-    if (isWorkoutQuery(message)) {
+    const isWorkout = isWorkoutQuery(message);
+    const isNutrition = isNutritionQuery(message);
+    
+    if (isWorkout) {
       additionalData = await fetchWorkoutData(message);
       dataSource = 'exercise';
       if (additionalData) {
@@ -192,11 +221,11 @@ serve(async (req) => {
           content: `I found these exercises that might be relevant to the user's query. Use this data to provide specific exercise recommendations:\n\n${exerciseSummary}\n\nRemember to format workout plans as described earlier if the user wants to save them.`
         });
       }
-    } else if (isNutritionQuery(message)) {
-      additionalData = await fetchRecipeData(message);
+    } else if (isNutrition) {
+      recipeData = await fetchRecipeData(message);
       dataSource = 'recipe';
-      if (additionalData) {
-        const recipeSummary = additionalData.map(recipe => 
+      if (recipeData) {
+        const recipeSummary = recipeData.map(recipe => 
           `Title: ${recipe.title}, Calories: ${recipe.nutrition?.calories || 'N/A'}, Diet: ${recipe.diets?.join(', ') || 'N/A'}`
         ).join('\n');
         
@@ -276,7 +305,8 @@ serve(async (req) => {
         reply: cleanedReply,
         additionalData: additionalData,
         dataSource: dataSource,
-        parsedPlan: parsedPlan
+        parsedPlan: parsedPlan,
+        recipeData: recipeData
       }),
       { 
         headers: { 

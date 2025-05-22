@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Button } from "@/components/ui/button";
@@ -12,29 +11,38 @@ const MindfulnessPage = () => {
   const [activeSession, setActiveSession] = useState<boolean>(false);
   const [sessionType, setSessionType] = useState<string>('');
   const [sessionDuration, setSessionDuration] = useState<number>(0);
+  const [soundsReady, setSoundsReady] = useState<boolean>(false);
   const { toast } = useToast();
   const sounds = useSounds();
   
   // Preload sounds when the page mounts
   useEffect(() => {
-    // Test sound to ensure audio is working
-    const testSound = () => {
-      if (sounds.isLoaded.chimes) {
+    // Check if sounds are loaded
+    const checkSoundsLoaded = () => {
+      const requiredSounds = ['chimes', 'meditation', 'ambient', 'nature'];
+      const allLoaded = requiredSounds.every(sound => sounds.isLoaded[sound as any]);
+      
+      if (allLoaded) {
+        console.log("All mindfulness sounds loaded successfully");
+        setSoundsReady(true);
+        // Play a test sound to ensure audio context is activated
         sounds.play('chimes', { volume: 0.3 });
+        
         toast({
-          title: "Sound Check",
-          description: "If you can't hear the chimes, please check your device's volume settings.",
+          title: "Ready for Mindfulness",
+          description: "Select a session to begin your practice.",
         });
       } else {
-        setTimeout(testSound, 1000); // Try again in a second
+        console.log("Sounds still loading...");
+        setTimeout(checkSoundsLoaded, 1000); // Check again in a second
       }
     };
     
-    // Delay to ensure sounds have time to load
-    const timer = setTimeout(testSound, 2000);
+    // Start checking if sounds are loaded
+    checkSoundsLoaded();
     
+    // Clean up any playing sounds when component unmounts
     return () => {
-      clearTimeout(timer);
       sounds.stopAll();
     };
   }, []);
@@ -46,7 +54,7 @@ const MindfulnessPage = () => {
     
     // Play a sound to indicate session start
     if (sounds.isLoaded.chimes) {
-      sounds.play('chimes', { volume: 0.3 });
+      sounds.play('chimes', { volume: 0.5 });
     }
   };
 
@@ -59,7 +67,7 @@ const MindfulnessPage = () => {
     
     // Play completion sound
     if (sounds.isLoaded.chimes) {
-      sounds.play('chimes', { volume: 0.5 });
+      sounds.play('chimes', { volume: 0.7 });
     }
   };
 
@@ -188,6 +196,7 @@ const MindfulnessPage = () => {
               duration={sessionDuration}
               onComplete={handleCompleteSession}
               onCancel={handleCancelSession}
+              soundsReady={soundsReady}
             />
           </div>
         )}

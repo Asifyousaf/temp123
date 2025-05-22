@@ -1,6 +1,3 @@
-// Fix Chat History Persistence and Recipe Button Restoration
-// We'll load chat history from localStorage on mount and save on any conversation change
-// Also ensure the RecipePreview button is triggered and visible
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Slider } from '@/components/ui/slider';
 import useSounds, { SoundType } from '@/hooks/useSounds';
+import { useSubscription } from '@/hooks/useSubscription';
 
 // Import refactored components
 import ChatHeader from './chat/ChatHeader';
@@ -33,8 +31,6 @@ interface AISupportChatProps {
   onClose?: () => void;
 }
 
-const CHAT_HISTORY_KEY = 'ai_chat_history';
-
 const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose }) => {
   const [isOpen, setIsOpen] = useState(visible);
   const [message, setMessage] = useState('');
@@ -53,34 +49,10 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [volume, setVolume] = useState(50);
+  const { subscription, isSubscribed } = useSubscription();
   
   const { play, isLoaded } = useSounds();
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Load chat history from localStorage on mount
-  useEffect(() => {
-    const savedHistory = localStorage.getItem(CHAT_HISTORY_KEY);
-    if (savedHistory) {
-      try {
-        const parsed = JSON.parse(savedHistory);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Parse dates back to Date objects
-          const restored = parsed.map(msg => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }));
-          setConversation(restored);
-        }
-      } catch (e) {
-        console.error('Failed to parse chat history from localStorage', e);
-      }
-    }
-  }, []);
-
-  // Save chat history to localStorage on each conversation change
-  useEffect(() => {
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(conversation));
-  }, [conversation]);
 
   // Update isOpen when visible prop changes
   useEffect(() => {
@@ -167,6 +139,35 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
     
     if (!message.trim()) return;
 
+    // Check subscription status for AI requests
+    if (!isSubscribed && user) {
+      // Check if user has free requests left
+      const { data: freeUsage } = await supabase
+        .from('free_usage')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+        
+      if (freeUsage && freeUsage.requests_left <= 0) {
+        toast({
+          title: "Request Limit Reached",
+          description: "You've used all your free AI requests. Please upgrade to a premium plan for unlimited access.",
+          variant: "destructive",
+        });
+        
+        playSoundEffect('failure');
+        return;
+      }
+      
+      // Decrement request count if user is on free plan
+      if (freeUsage) {
+        await supabase
+          .from('free_usage')
+          .update({ requests_left: freeUsage.requests_left - 1 })
+          .eq('user_id', user.id);
+      }
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       content: message,
@@ -187,12 +188,16 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
     setIsLoading(true);
 
     try {
+      // Include subscription info in the request to adjust AI response
+      const subscriptionTier = subscription?.plan_id || 1;
+      
       // Call our Edge Function
       const { data, error } = await supabase.functions.invoke('wellness-chatbot', {
         body: { 
           message: userMessage,
           history: conversation,
-          userProfile: userProfile
+          userProfile: userProfile,
+          subscriptionTier: subscriptionTier
         }
       });
       
@@ -259,8 +264,7 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
 
   const handleAddWorkout = async (workoutPlan: any) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
+      if (!user) {
         toast({
           title: "Sign in required",
           description: "Please sign in to save workout plans",
@@ -269,79 +273,38 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
         return;
       }
 
+      // Extract workout details
       const workoutData = {
         user_id: user.id,
-        title: workoutPlan.title || workoutPlan.name || "Custom Workout",
-        type: workoutPlan.type || workoutPlan.workoutType || "General",
-        duration: workoutPlan.duration || 30, // Use provided duration or default
-        calories_burned: workoutPlan.calories_burned || 300,
+        title: workoutPlan.title,
+        type: workoutPlan.type,
+        duration: 30, // Default duration
+        calories_burned: 300, // Default calories
         date: new Date().toISOString().split('T')[0]
       };
 
+      // Save to Supabase
       const { error } = await supabase.from('workouts').insert(workoutData);
 
       if (error) throw error;
-
+      
+      // Play success sound
       playSoundEffect('success');
-
+      
       toast({
         title: "Workout Added",
         description: "The workout plan has been added to your routines",
       });
     } catch (error) {
+      // Play error sound
       playSoundEffect('failure');
-
+      
       toast({
         title: "Error",
         description: "Failed to add workout plan",
         variant: "destructive"
       });
       console.error('Error saving workout:', error);
-    }
-  };
-
-  const handleSaveRecipe = async (recipe: any) => {
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        toast({
-          title: "Sign in required",
-          description: "Please sign in to save recipes",
-          variant: "default",
-        });
-        return;
-      }
-
-      const nutritionData = {
-        user_id: user.id,
-        food_name: recipe.title || recipe.name || "Custom Recipe",
-        calories: recipe.calories ? Math.floor(Number(recipe.calories)) : (recipe.nutrition?.calories ? Math.floor(Number(recipe.nutrition.calories)) : 300),
-        protein: recipe.protein ? Math.floor(Number(recipe.protein)) : (recipe.nutrition?.protein ? Math.floor(Number(recipe.nutrition.protein)) : 25),
-        carbs: recipe.carbs ? Math.floor(Number(recipe.carbs)) : (recipe.nutrition?.carbs ? Math.floor(Number(recipe.nutrition.carbs)) : 40),
-        fat: recipe.fat ? Math.floor(Number(recipe.fat)) : (recipe.nutrition?.fat ? Math.floor(Number(recipe.nutrition.fat)) : 15),
-        meal_type: "recipe",
-        date: new Date().toISOString().split('T')[0]
-      };
-
-      const { error } = await supabase.from('nutrition_logs').insert(nutritionData);
-
-      if (error) throw error;
-
-      playSoundEffect('success');
-
-      toast({
-        title: "Recipe Saved",
-        description: "The recipe has been saved to your nutrition logs",
-      });
-    } catch (error) {
-      playSoundEffect('failure');
-
-      toast({
-        title: "Error",
-        description: "Failed to save recipe. Please try again.",
-        variant: "destructive"
-      });
-      console.error('Error saving recipe:', error);
     }
   };
 
@@ -441,6 +404,13 @@ const AISupportChat: React.FC<AISupportChatProps> = ({ visible = false, onClose 
                 <div ref={messagesEndRef} />
               </div>
             </div>
+            
+            {/* Subscription Status Indication */}
+            {user && !isSubscribed && (
+              <div className="bg-amber-50 border-t border-amber-100 p-2 text-xs text-amber-700 text-center">
+                <p>{subscription ? `${subscription.plan_id === 1 ? 'Basic' : 'Free'} plan: ${4 - (userProfile?.ai_requests_used || 0)}/4 AI requests remaining` : 'Free plan: Limited AI requests available'}</p>
+              </div>
+            )}
             
             {/* Suggested Questions */}
             {conversation.length < 3 && (
