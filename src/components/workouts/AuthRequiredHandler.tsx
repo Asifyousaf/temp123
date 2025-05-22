@@ -1,9 +1,8 @@
 
-import React from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from "@/components/ui/use-toast";
 import { WorkoutData } from '@/types/workout';
-import { supabase } from "@/integrations/supabase/client";
+import { toast } from '@/components/ui/use-toast';
 
 interface AuthRequiredHandlerProps {
   session: any;
@@ -12,30 +11,24 @@ interface AuthRequiredHandlerProps {
 
 const AuthRequiredHandler = ({ session, onStartWorkout }: AuthRequiredHandlerProps) => {
   const navigate = useNavigate();
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const handleStartWorkout = async (workout: WorkoutData) => {
-    // Double-check current session status
-    const { data } = await supabase.auth.getSession();
-    
-    if (!session && !data.session) {
+  const handleStartWorkout = (workout: WorkoutData) => {
+    if (!session) {
       toast({
         title: "Authentication required",
-        description: "Please sign in to start a workout session",
-        variant: "destructive"
+        description: "Please sign in to start this workout",
+        variant: "default"
       });
+      setIsAuthenticating(true);
       navigate('/auth');
       return;
-    }
-    
-    // Ensure workout has an image
-    if (!workout.image || workout.image === '') {
-      workout.image = "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2340&q=80";
     }
     
     onStartWorkout(workout);
   };
 
-  return { handleStartWorkout };
+  return { handleStartWorkout, isAuthenticating };
 };
 
 export default AuthRequiredHandler;
