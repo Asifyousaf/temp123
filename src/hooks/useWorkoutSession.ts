@@ -1,89 +1,52 @@
-import { useState, useEffect, useRef } from 'react';
+
+import { useEffect } from 'react';
 import { toast } from "@/components/ui/use-toast";
-import { Exercise, WorkoutData, WorkoutPlan } from '@/types/workout';
-import { getBestExerciseImageUrlSync } from '@/utils/exerciseImageUtils';
+import { Exercise, WorkoutData } from '@/types/workout';
+import { useWorkoutSessionState } from './workout-session/useWorkoutSessionState';
+import { determineWorkoutTypes, getWorkoutExercises } from './workout-session/workoutTypeUtils';
+import { useWorkoutTimer } from './workout-session/useWorkoutTimer';
+import { useWorkoutCompletion } from './workout-session/useWorkoutCompletion';
 
 export const useWorkoutSession = (workout: WorkoutData, onComplete: (data: any) => void) => {
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [currentSet, setCurrentSet] = useState(1);
-  const [isResting, setIsResting] = useState(false);
-  const [isPaused, setIsPaused] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
-  const [completedExercises, setCompletedExercises] = useState(0);
-  const [completedExerciseDetails, setCompletedExerciseDetails] = useState<{[key: string]: boolean}>({});
-  const [animateTimer, setAnimateTimer] = useState(false);
-  const [activePackItemIndex, setActivePackItemIndex] = useState(0);
-  const [skippedExercises, setSkippedExercises] = useState<{[key: string]: boolean}>({});
-  const timerRef = useRef<any>(null);
-
-  // Format workout data
-  const workoutWithCalories: WorkoutPlan = {
-    ...workout,
-    caloriesBurn: workout.caloriesBurn || workout.calories_burned || 300
-  };
-
-  // Determine if it's a workout pack
-  const isWorkoutPack = workout?.isPack && Array.isArray(workout?.packItems) && workout?.packItems?.length > 0;
+  // Get state management
+  const {
+    currentExerciseIndex, setCurrentExerciseIndex,
+    currentSet, setCurrentSet,
+    isResting, setIsResting,
+    isPaused, setIsPaused,
+    timeLeft, setTimeLeft,
+    totalTimeElapsed, setTotalTimeElapsed,
+    completedExercises, setCompletedExercises,
+    completedExerciseDetails, setCompletedExerciseDetails,
+    animateTimer, setAnimateTimer,
+    activePackItemIndex, setActivePackItemIndex,
+    skippedExercises, setSkippedExercises,
+    workoutWithCalories
+  } = useWorkoutSessionState(workout);
   
-  const isAIGeneratedPack = !isWorkoutPack && 
-    typeof workout?.exercises === 'object' && 
-    (workout?.exercises as any)?.isWorkoutPack === true &&
-    Array.isArray((workout?.exercises as any)?.list);
+  // Setup timer
+  useWorkoutTimer(isPaused, setTimeLeft, setTotalTimeElapsed, setAnimateTimer);
+  
+  // Get workout type information
+  const { isWorkoutPack, isAIGeneratedPack } = determineWorkoutTypes(workout);
   
   // Get active workout and exercises
-  let activeWorkout: WorkoutPlan = workoutWithCalories;
-  let exercises: Exercise[] = [];
+  const { activeWorkout, exercises } = getWorkoutExercises(workout, activePackItemIndex);
   
-  if (isWorkoutPack && workout?.packItems) {
-    const packItem = workout.packItems[activePackItemIndex] || workout;
-    activeWorkout = {
-      ...packItem,
-      caloriesBurn: packItem.caloriesBurn || packItem.calories_burned || 300
-    };
-    exercises = Array.isArray(activeWorkout?.exercises) ? activeWorkout.exercises : [];
-  } else if (isAIGeneratedPack) {
-    const exercisesList = (workout?.exercises as any)?.list || [];
-    exercises = exercisesList;
-    
-    if ((workout?.exercises as any)?.originalWorkouts) {
-      workout.packItems = (workout?.exercises as any)?.originalWorkouts;
-    }
-    
-    workout.isPack = true;
-  } else {
-    exercises = Array.isArray(workout?.exercises) ? workout.exercises : [];
-  }
-  
+  // Get current exercise
   const currentExercise = exercises[currentExerciseIndex] || null;
+  
+  // Calculate total exercises
   const totalExercises = isWorkoutPack && workout?.packItems
     ? workout.packItems.reduce((sum, w) => 
         sum + (Array.isArray(w?.exercises) ? w.exercises.length : 0), 0)
     : exercises.length;
+    
+  // Calculate progress
   const progress = Math.round((completedExercises / Math.max(totalExercises, 1)) * 100);
-
-  // Timer functionality
-  useEffect(() => {
-    if (!isPaused) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            setAnimateTimer(true);
-            setTimeout(() => setAnimateTimer(false), 1000);
-            return 0;
-          }
-          return prev - 1;
-        });
-        
-        setTotalTimeElapsed(prev => prev + 1);
-      }, 1000);
-    } else {
-      clearInterval(timerRef.current);
-    }
-
-    return () => clearInterval(timerRef.current);
-  }, [isPaused]);
+  
+  // Get completion handler
+  const { handleComplete: completeWorkout } = useWorkoutCompletion(onComplete);
 
   // Handle timer completion
   useEffect(() => {
@@ -192,40 +155,13 @@ export const useWorkoutSession = (workout: WorkoutData, onComplete: (data: any) 
     }
   };
 
-  const handleComplete = async () => {
-    const minutesSpent = Math.max(Math.round(totalTimeElapsed / 60), 1);
-    
-    const completedExerciseCount = Object.keys(completedExerciseDetails).length;
-    const totalExerciseCount = totalExercises;
-    
-    const adjustedCompletionPercentage = totalExerciseCount > 0 ? 
-      completedExerciseCount / totalExerciseCount : 0;
-    
-    const minCaloriePercentage = 0.3;
-    const caloriesBurn = workoutWithCalories.caloriesBurn || workoutWithCalories.calories_burned || 300; 
-    const workoutDuration = workoutWithCalories.duration || 30;
-    
-    const estimatedCalories = Math.round(
-      caloriesBurn * Math.max(
-        adjustedCompletionPercentage,
-        Math.min(minutesSpent / workoutDuration, 1) * adjustedCompletionPercentage,
-        minCaloriePercentage * adjustedCompletionPercentage
-      )
+  const handleComplete = () => {
+    completeWorkout(
+      workoutWithCalories, 
+      totalTimeElapsed, 
+      completedExerciseDetails,
+      totalExercises
     );
-    
-    const workoutData = {
-      title: workoutWithCalories.title,
-      type: workoutWithCalories.type,
-      duration: minutesSpent,
-      calories_burned: estimatedCalories
-    };
-    
-    toast({
-      title: "Workout Complete!",
-      description: `You burned approximately ${estimatedCalories} calories in ${minutesSpent} minutes.`,
-    });
-    
-    onComplete(workoutData);
   };
   
   return {
