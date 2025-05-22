@@ -6,6 +6,7 @@ import WorkoutHeader from '../components/workouts/WorkoutHeader';
 import SearchAndFilter from '../components/workouts/SearchAndFilter';
 import WorkoutsList from '../components/workouts/WorkoutsList';
 import WorkoutCompleteHandler from '../components/workouts/WorkoutCompleteHandler';
+import WorkoutSession from '../components/WorkoutSession';
 import { WorkoutData } from '@/types/workout';
 import { useWorkouts } from '@/hooks/useWorkouts';
 import AuthRequiredHandler from '../components/workouts/AuthRequiredHandler';
@@ -54,12 +55,13 @@ const WorkoutsPage = () => {
     return (
       <Layout>
         <div className="pt-24 pb-16 bg-white">
-          <WorkoutCompleteHandler
-            activeWorkout={activeWorkout}
-            session={session}
-            onCompleteWorkout={() => setActiveWorkout(null)}
-            onCancelWorkout={() => setActiveWorkout(null)}
-          />
+          <div className="container mx-auto px-4">
+            <WorkoutSession
+              workout={activeWorkout}
+              onComplete={() => setActiveWorkout(null)}
+              onCancel={() => setActiveWorkout(null)}
+            />
+          </div>
         </div>
       </Layout>
     );
